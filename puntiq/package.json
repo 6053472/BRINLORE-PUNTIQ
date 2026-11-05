@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev apps/web",
-    "build": "next build apps/web",
-    "start": "next start apps/web",
+    "dev": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/web run build",
+    "start": "npm --prefix apps/web run start",
     "lint": "next lint"
   },
   "dependencies": {

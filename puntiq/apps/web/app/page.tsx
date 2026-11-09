@@ -77,76 +77,6 @@ const navItems: { id: ModuleId; icon: string; label: string }[] = [
   { id: "documents", icon: "□", label: "Documenten" },
   { id: "finance", icon: "€", label: "Financieel" },
 ];
-const propertiesSeed: Property[] = [
-  {
-    id: 1,
-    name: "Prinsengracht 482",
-    address: "1017 KH Amsterdam",
-    type: "Zelfstandig",
-    status: "Verhuurd",
-    points: 178,
-    rent: 1142.04,
-    image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=900&q=85",
-    area: 82,
-    rooms: 3,
-    bedrooms: 2,
-    yearBuilt: 1904,
-    energyLabel: "B",
-    floor: "3e verdieping",
-    description: "Licht en karakteristiek appartement aan de gracht, met hoge plafonds, een moderne keuken en een zonnig balkon.",
-  },
-  {
-    id: 2,
-    name: "Willemsparkweg 94",
-    address: "1071 HH Amsterdam",
-    type: "Zelfstandig",
-    status: "Beschikbaar",
-    points: 142,
-    rent: 912.37,
-    image: "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=900&q=85",
-    area: 68,
-    rooms: 3,
-    bedrooms: 1,
-    yearBuilt: 1932,
-    energyLabel: "A",
-    floor: "1e verdieping",
-    description: "Rustige woning met veel daglicht, een open leefruimte en goede verbindingen naar het centrum.",
-  },
-  {
-    id: 3,
-    name: "Korte Nieuweweg 11A",
-    address: "3512 NP Utrecht",
-    type: "Onzelfstandig",
-    status: "In onderhoud",
-    points: 87,
-    rent: 548.12,
-    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=85",
-    area: 41,
-    rooms: 2,
-    bedrooms: 1,
-    yearBuilt: 1988,
-    energyLabel: "C",
-    floor: "Begane grond",
-    description: "Compacte en praktische woning die momenteel wordt opgefrist en binnenkort weer beschikbaar komt.",
-  },
-  {
-    id: 4,
-    name: "Singel 229",
-    address: "1012 WE Amsterdam",
-    type: "Zelfstandig",
-    status: "Verhuurd",
-    points: 198,
-    rent: 1294.81,
-    image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=900&q=85",
-    area: 96,
-    rooms: 4,
-    bedrooms: 2,
-    yearBuilt: 1911,
-    energyLabel: "A",
-    floor: "2e verdieping",
-    description: "Ruim stadsappartement met originele details, een luxe badkamer en uitzicht over de Singel.",
-  },
-];
 const tenantsSeed: Tenant[] = [
   {
     id: 1,
@@ -276,7 +206,7 @@ const descriptions: Record<ModuleId, string> = {
 export default function Home() {
   const router = useRouter();
   const [active, setActive] = useState<ModuleId>("dashboard");
-  const [properties, setProperties] = useState(propertiesSeed);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState(tenantsSeed);
   const [contracts] = useState(contractsSeed);
   const [maintenance, setMaintenance] = useState(maintenanceSeed);
@@ -309,6 +239,14 @@ export default function Home() {
       .catch(() => undefined);
   }, []);
   useEffect(() => {
+    fetch("/api/properties")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        setProperties(Array.isArray(data?.properties) ? data.properties : []);
+      })
+      .catch(() => setProperties([]));
+  }, []);
+  useEffect(() => {
     localStorage.setItem("puntiq-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
   const notify = (message: string) => {
@@ -331,17 +269,17 @@ export default function Home() {
       : active === "settings"
         ? "Instellingen"
         : (navItems.find((item) => item.id === active)?.label ?? "Overzicht");
-  const addProperty = (event: FormEvent<HTMLFormElement>) => {
+  const addProperty = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const d = new FormData(event.currentTarget);
     const images = d.getAll("images").map(String).filter(Boolean);
-    setProperties([
-      {
-        id: Date.now(),
+    const response = await fetch("/api/properties", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         name: String(d.get("name")),
         address: String(d.get("address")),
         type: String(d.get("type")),
-        status: "Beschikbaar",
         points: Number(d.get("points")) || 0,
         rent: Number(d.get("rent")) || 0,
         image: images[0] || "",
@@ -354,11 +292,28 @@ export default function Home() {
         floor: String(d.get("floor") || ""),
         price: Number(d.get("price")) || undefined,
         description: String(d.get("description") || ""),
-      },
-      ...properties,
-    ]);
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.property) {
+      notify(result?.error ?? "Woning kon niet worden opgeslagen");
+      return;
+    }
+    setProperties((current) => [result.property, ...current]);
     setModal(null);
     notify("Nieuwe woning toegevoegd aan uw portefeuille");
+  };
+  const removeProperty = async (property: Property) => {
+    if (!window.confirm(`Woning \'${property.name}\' definitief verwijderen?`)) return;
+    const response = await fetch(`/api/properties/${property.id}`, { method: "DELETE" });
+    if (!response.ok) {
+      notify("Woning kon niet worden verwijderd");
+      return;
+    }
+    setProperties((current) => current.filter((item) => item.id !== property.id));
+    setSelectedProperty(null);
+    setModal(null);
+    notify("Woning verwijderd");
   };
   const addTenant = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -412,8 +367,15 @@ export default function Home() {
     <main className={`app-shell ${darkMode ? "dark-mode" : ""}`}>
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">P</span>
-          <span>
+          <span className="brand-mark" aria-label="BRINLORE PUNTIQ logo">
+            <img
+              className="brand-logo-icon"
+              src="/brinlore-puntiq-logo.png"
+              alt="BRINLORE-logo"
+            />
+            <span className="brand-descriptor">WONEN &amp; BEDRIJFSVASTGOED</span>
+          </span>
+          <span className="brand-name">
             BRINLORE <b>PUNTIQ</b>
           </span>
         </div>
@@ -586,6 +548,7 @@ export default function Home() {
       {modal === "propertyDetail" && selectedProperty && (
         <PropertyDetail
           property={selectedProperty}
+          onDelete={() => removeProperty(selectedProperty)}
           onClose={() => {
             setModal(null);
             setSelectedProperty(null);
@@ -2090,9 +2053,11 @@ function PropertyModal({
 function PropertyDetail({
   property,
   onClose,
+  onDelete,
 }: {
   property: Property;
   onClose: () => void;
+  onDelete: () => void;
 }) {
   const images = propertyImages(property);
   const [activeImage, setActiveImage] = useState(0);
@@ -2204,6 +2169,9 @@ function PropertyDetail({
           </div>
         )}
         <div className="modal-actions">
+          <button type="button" className="danger-button" onClick={onDelete}>
+            Woning verwijderen
+          </button>
           <button className="primary" onClick={onClose}>
             Sluiten
           </button>

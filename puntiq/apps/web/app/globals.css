@@ -879,6 +879,923 @@ td span {
     width: 200px;
   }
 }
+
+/* BRINLORE-styling voor login en registratie. */
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(185, 154, 97, 0.16), transparent 30%),
+    var(--navy);
+}
+
+.login-card {
+  width: min(520px, 100%);
+  padding: 44px;
+  overflow: hidden;
+  background: var(--white);
+  border: 1px solid rgba(20, 43, 59, 0.16);
+  border-top: 4px solid var(--gold);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 92px;
+  margin: -44px -44px 38px;
+  padding: 18px 28px;
+  background: var(--navy);
+}
+
+.login-logo {
+  display: block;
+  width: min(410px, 100%);
+  height: auto;
+  max-height: 82px;
+  object-fit: contain;
+}
+
+.login-card .eyebrow {
+  margin-bottom: 10px;
+  color: var(--gold);
+}
+
+.login-card h1 {
+  margin: 0 0 8px;
+  color: var(--navy);
+  font: 400 clamp(30px, 4vw, 40px)/1.1 Georgia, "Times New Roman", serif;
+  letter-spacing: -0.025em;
+}
+
+.login-card > .muted {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.login-form {
+  margin-top: 30px;
+}
+
+.login-form label {
+  margin: 18px 0;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.login-form input {
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 13px 14px;
+  color: var(--navy);
+  background: var(--white);
+  border: 1px solid rgba(20, 43, 59, 0.22);
+  border-radius: 8px;
+  font: 15px Arial, sans-serif;
+}
+
+.login-form input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(185, 154, 97, 0.18);
+  outline: none;
+}
+
+.login-form .primary {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 16px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.login-error {
+  color: #8f3f35;
+  background: #f9e8e2;
+  border: 1px solid #e9c4bb;
+  border-radius: 8px;
+}
+
+.login-switch {
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.login-switch a {
+  color: var(--navy);
+  font-weight: 700;
+  text-decoration-color: var(--gold);
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 600px) {
+  .login-card {
+    padding: 30px 24px;
+  }
+
+  .login-brand {
+    margin: -30px -24px 30px;
+  }
+}
+
+/* BRINLORE huisstijl: visuele laag voor de vastgoedbeheer-app. */
+:root {
+  --ink: #142b3b;
+  --muted: #3e5363;
+  --line: rgba(20, 43, 59, 0.14);
+  --bg: #eee6d8;
+  --blue: #142b3b;
+  --green: #8c9b88;
+  --orange: #b99a61;
+  --purple: #b99a61;
+  --gold: #b99a61;
+  --navy: #142b3b;
+  --sage: #8c9b88;
+  --white: #ffffff;
+  --shadow: 0 18px 40px -24px rgba(20, 43, 59, 0.45);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Arial, sans-serif;
+}
+
+body {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: Arial, sans-serif;
+}
+
+button,
+.primary,
+.secondary,
+.light-button,
+.link-button,
+.icon-button {
+  border-radius: 2px;
+}
+
+.app-shell,
+.page-body {
+  background: var(--bg);
+}
+
+.sidebar {
+  background: var(--navy);
+  border-right: 0;
+  color: var(--white);
+}
+
+.brand,
+.sidebar .brand,
+.sidebar .brand strong {
+  color: var(--white);
+}
+
+.brand-mark {
+  background: var(--gold);
+  color: var(--navy);
+  border-radius: 2px;
+}
+
+.nav-item {
+  color: rgba(255, 255, 255, 0.78);
+  border-radius: 0;
+}
+
+.nav-item:hover,
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white);
+  border-left-color: var(--gold);
+}
+
+.topbar {
+  background: rgba(238, 230, 216, 0.96);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar h1,
+.page-title,
+.welcome h1 {
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+}
+
+.eyebrow,
+.section-label,
+.module-banner .eyebrow {
+  color: var(--gold);
+  font-family: Arial, sans-serif;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.panel,
+.stat-card,
+.property-card,
+.login-card,
+.modal,
+.welcome,
+.table-wrap,
+.property-detail-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+}
+
+.panel,
+.stat-card,
+.property-card {
+  border-top: 3px solid var(--gold);
+}
+
+.primary {
+  background: var(--navy);
+  border: 2px solid var(--navy);
+  color: var(--white);
+}
+
+.primary:hover {
+  background: #1d3b50;
+  border-color: #1d3b50;
+}
+
+.secondary {
+  background: transparent;
+  border: 2px solid var(--navy);
+  color: var(--navy);
+}
+
+.secondary:hover,
+.link-button:hover {
+  background: var(--sand, #eee6d8);
+  color: var(--navy);
+}
+
+.light-button {
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  color: var(--white);
+}
+
+.light-button:hover {
+  background: var(--white);
+  color: var(--navy);
+}
+
+.link-button {
+  color: var(--navy);
+}
+
+.module-banner,
+.welcome-banner,
+.dark-panel {
+  background: var(--navy);
+  border-radius: 2px;
+  color: var(--white);
+}
+
+.module-banner h2,
+.module-banner h3,
+.welcome-banner h2,
+.dark-panel h2 {
+  color: var(--white);
+}
+
+.module-banner p,
+.welcome-banner p,
+.dark-panel p {
+  color: var(--br-on-navy-muted, rgba(255, 255, 255, 0.78));
+}
+
+input,
+select,
+textarea,
+.search-input,
+.property-fields input,
+.property-fields select {
+  background: var(--white);
+  border: 1px solid rgba(20, 43, 59, 0.22);
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.search-input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(185, 154, 97, 0.18);
+  outline: none;
+}
+
+.status,
+.badge,
+.tag {
+  border-radius: 999px;
+}
+
+.status.active,
+.status.success,
+.badge.active {
+  background: rgba(140, 155, 136, 0.2);
+  color: #526b55;
+}
+
+.status.pending,
+.badge.pending {
+  background: rgba(185, 154, 97, 0.2);
+  color: #796035;
+}
+
+.table th {
+  background: var(--navy);
+  color: var(--white);
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.table tr:hover,
+.property-row:hover {
+  background: rgba(238, 230, 216, 0.72);
+}
+
+.property-card-image,
+.property-upload-preview,
+.property-photo-frame {
+  border-radius: 2px;
+}
+
+.property-card-image {
+  border-bottom: 3px solid var(--gold);
+}
+
+.property-rent-highlight {
+  background: var(--bg);
+  border: 1px solid rgba(185, 154, 97, 0.45);
+  border-radius: 2px;
+}
+
+.property-rent-highlight strong {
+  color: var(--navy);
+}
+
+.modal-backdrop {
+  background: rgba(20, 43, 59, 0.72);
+}
+
+.modal {
+  color: var(--ink);
+}
+
+.modal-head {
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-head h2,
+.modal-head h3 {
+  color: var(--ink);
+}
+
+.close,
+.row-menu,
+.icon-button {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--navy);
+}
+
+.close:hover,
+.row-menu:hover,
+.icon-button:hover {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.form-label,
+label {
+  color: var(--muted);
+}
+
+.form-section,
+.property-detail-grid div,
+.property-upload-preview {
+  background: rgba(238, 230, 216, 0.62);
+  border-color: var(--line);
+}
+
+.points,
+.score,
+.total-points {
+  background: var(--navy);
+  color: var(--white);
+  border-radius: 2px;
+}
+
+/* Dark mode keeps the BRINLORE contrast instead of reverting to white controls. */
+.dark-mode,
+.dark-mode .app-shell,
+.dark-mode .page-body {
+  background: #0f202c;
+  color: #f7f4ed;
+}
+
+.dark-mode .topbar {
+  background: #142b3b;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.dark-mode .topbar h1,
+.dark-mode h1,
+.dark-mode h2,
+.dark-mode h3,
+.dark-mode h4,
+.dark-mode .page-title,
+.dark-mode .welcome h1 {
+  color: #f7f4ed;
+}
+
+.dark-mode .panel,
+.dark-mode .stat-card,
+.dark-mode .property-card,
+.dark-mode .login-card,
+.dark-mode .modal,
+.dark-mode .welcome,
+.dark-mode .table-wrap,
+.dark-mode .property-detail-card {
+  background: #183342;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f7f4ed;
+}
+
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea,
+.dark-mode .search-input,
+.dark-mode .property-fields input,
+.dark-mode .property-fields select {
+  background: #102633;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #f7f4ed;
+}
+
+.dark-mode .secondary {
+  border-color: var(--gold);
+  color: #f7f4ed;
+}
+
+.dark-mode .secondary:hover {
+  background: rgba(185, 154, 97, 0.18);
+}
+
+.dark-mode .close,
+.dark-mode .row-menu,
+.dark-mode .icon-button {
+  background: #214456;
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #f7f4ed;
+}
+
+.dark-mode .property-detail-grid div,
+.dark-mode .property-upload-preview,
+.dark-mode .form-section {
+  background: #102633;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.dark-mode .property-rent-highlight {
+  background: #102633;
+  border-color: rgba(185, 154, 97, 0.55);
+}
+
+.dark-mode .property-rent-highlight strong,
+.dark-mode .link-button {
+  color: #e2c48e;
+}
+
+/* Afwerking: zachtere overgangen tussen navigatie, achtergrond en kaarten. */
+.content {
+  background: var(--bg);
+}
+
+.sidebar {
+  width: 270px;
+  padding: 24px 14px 18px;
+  background: var(--navy);
+  border-right: 0;
+}
+
+.sidebar .brand {
+  padding: 0 12px;
+  margin-bottom: 8px;
+  letter-spacing: 0.08em;
+}
+
+.sidebar .brand b {
+  color: var(--white);
+}
+
+.sidebar .brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.workspace {
+  margin: 28px 0 25px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  color: var(--white);
+}
+
+.workspace small,
+.profile small {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.workspace strong,
+.profile strong {
+  color: var(--white);
+}
+
+.workspace .avatar,
+.profile .avatar {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.chevron,
+.dots {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.sidebar nav {
+  gap: 5px;
+}
+
+.nav-item {
+  min-height: 46px;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font: 600 13px Arial, sans-serif;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.nav-item i {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--white);
+  transform: translateX(2px);
+}
+
+.nav-item.active {
+  background: var(--gold);
+  color: var(--navy);
+  border-color: var(--gold);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.nav-item.active i {
+  color: var(--navy);
+}
+
+.nav-count {
+  background: var(--white);
+  color: var(--navy);
+  border-radius: 999px;
+}
+
+.profile {
+  border-top-color: rgba(255, 255, 255, 0.16);
+}
+
+.topbar {
+  min-height: 76px;
+  background: rgba(238, 230, 216, 0.92);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+.page-body {
+  padding: 42px 48px 64px;
+}
+
+.welcome {
+  align-items: center;
+  margin-bottom: 34px;
+  padding: 28px 30px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(20, 43, 59, 0.1);
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.welcome h1 {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.08;
+}
+
+.welcome .primary {
+  border-radius: 10px;
+  padding: 14px 20px;
+}
+
+.stats-grid,
+.grid-main,
+.recent-section {
+  gap: 20px;
+}
+
+.stat-card,
+.panel,
+.table-wrap,
+.property-card {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.stat-card {
+  min-height: 172px;
+  padding: 24px;
+}
+
+.stat-card:hover,
+.panel:hover,
+.property-card:hover {
+  box-shadow: 0 22px 44px -28px rgba(20, 43, 59, 0.62);
+}
+
+.panel {
+  padding: 28px;
+}
+
+.panel > h2:first-child,
+.panel > h3:first-child {
+  margin-top: 0;
+}
+
+.top-actions .icon-btn {
+  color: var(--navy);
+}
+
+.top-avatar {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.table-wrap {
+  border-top: 3px solid var(--gold);
+}
+
+.table th {
+  background: rgba(238, 230, 216, 0.72);
+  color: var(--navy);
+}
+
+.modal {
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.modal-head {
+  padding: 24px 28px;
+}
+
+.modal-body {
+  padding: 28px;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: 230px;
+  }
+
+  .page-body {
+    padding: 30px 24px 48px;
+  }
+}
+
+@media (max-width: 700px) {
+  .page-body {
+    padding: 24px 16px 40px;
+  }
+
+  .welcome {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 18px;
+    padding: 22px;
+  }
+
+  .panel {
+    padding: 20px;
+  }
+}
+
+.dark-mode .content {
+  background: #0f202c;
+}
+
+.dark-mode .workspace {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dark-mode .welcome {
+  background: rgba(24, 51, 66, 0.8);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.dark-mode .nav-item.active {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.dark-mode .table th {
+  background: #102633;
+  color: #f7f4ed;
+}
+
+/* Eigen BRINLORE PUNTIQ-logo: vastgoed-daklijn + herkenbare punt. */
+.brand-mark {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  flex: 0 0 88px;
+  width: 88px;
+  height: 88px;
+  overflow: visible;
+  background: transparent;
+  color: var(--white);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+}
+
+.brand-mark::before,
+.brand-mark::after {
+  position: absolute;
+  content: "";
+  background: var(--gold);
+  z-index: -1;
+}
+
+.brand-mark::before {
+  top: -1px;
+  left: -1px;
+  width: 18px;
+  height: 1px;
+}
+
+.brand-mark::after {
+  right: -1px;
+  bottom: -1px;
+  width: 1px;
+  height: 18px;
+}
+
+.brand-roof {
+  display: none;
+}
+
+.brand-letter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding-bottom: 1px;
+  color: var(--white);
+  font: 400 29px/1 Georgia, "Times New Roman", serif;
+}
+
+.brand-logo-icon {
+  display: block;
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  margin: 0;
+}
+
+.brand-descriptor {
+  position: absolute;
+  right: 4px;
+  bottom: 7px;
+  left: 4px;
+  color: rgba(255, 255, 255, 0.9);
+  font: 500 5px/1 Arial, sans-serif;
+  letter-spacing: 0.14em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* De aangeleverde logo-PNG bevat al het kader, de daklijn en de descriptor. */
+.brand-mark {
+  width: 88px;
+  height: 88px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.brand-mark::before,
+.brand-mark::after,
+.brand-descriptor {
+  display: none;
+}
+
+.brand > span:last-child {
+  display: grid;
+  gap: 2px;
+  color: var(--white);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  line-height: 1.1;
+}
+
+.brand > span:last-child b {
+  color: var(--gold);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+}
+
+.dark-mode .brand-mark {
+  background: transparent;
+}
+
+/* De PNG is een volledig logo-lockup; geef hem de ruimte die het originele beeld nodig heeft. */
+.sidebar > .brand {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0;
+  margin: 0 0 8px;
+}
+
+.sidebar > .brand .brand-mark {
+  flex: 0 0 180px;
+  width: 180px;
+  height: 46px;
+}
+
+.sidebar > .brand .brand-logo-icon {
+  width: 180px;
+  height: 46px;
+}
+
+.sidebar > .brand .brand-name {
+  display: none;
+}
+
+.sidebar > .workspace {
+  margin-top: 18px;
+}
+
+@media (max-width: 700px) {
+  .sidebar > .brand .brand-mark,
+  .sidebar > .brand .brand-logo-icon {
+    width: 160px;
+    height: 42px;
+  }
+
+  .sidebar > .brand .brand-mark {
+    flex-basis: 160px;
+  }
+}
 .action {
   width: 100%;
   border: 0;

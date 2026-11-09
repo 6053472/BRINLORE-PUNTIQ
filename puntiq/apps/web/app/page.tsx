@@ -23,6 +23,7 @@ type Property = {
   points: number;
   rent: number;
   image?: string;
+  images?: string[];
   area?: number;
   rooms?: number;
   bedrooms?: number;
@@ -85,6 +86,14 @@ const propertiesSeed: Property[] = [
     status: "Verhuurd",
     points: 178,
     rent: 1142.04,
+    image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=900&q=85",
+    area: 82,
+    rooms: 3,
+    bedrooms: 2,
+    yearBuilt: 1904,
+    energyLabel: "B",
+    floor: "3e verdieping",
+    description: "Licht en karakteristiek appartement aan de gracht, met hoge plafonds, een moderne keuken en een zonnig balkon.",
   },
   {
     id: 2,
@@ -94,6 +103,14 @@ const propertiesSeed: Property[] = [
     status: "Beschikbaar",
     points: 142,
     rent: 912.37,
+    image: "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=900&q=85",
+    area: 68,
+    rooms: 3,
+    bedrooms: 1,
+    yearBuilt: 1932,
+    energyLabel: "A",
+    floor: "1e verdieping",
+    description: "Rustige woning met veel daglicht, een open leefruimte en goede verbindingen naar het centrum.",
   },
   {
     id: 3,
@@ -103,6 +120,14 @@ const propertiesSeed: Property[] = [
     status: "In onderhoud",
     points: 87,
     rent: 548.12,
+    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=85",
+    area: 41,
+    rooms: 2,
+    bedrooms: 1,
+    yearBuilt: 1988,
+    energyLabel: "C",
+    floor: "Begane grond",
+    description: "Compacte en praktische woning die momenteel wordt opgefrist en binnenkort weer beschikbaar komt.",
   },
   {
     id: 4,
@@ -112,6 +137,14 @@ const propertiesSeed: Property[] = [
     status: "Verhuurd",
     points: 198,
     rent: 1294.81,
+    image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=900&q=85",
+    area: 96,
+    rooms: 4,
+    bedrooms: 2,
+    yearBuilt: 1911,
+    energyLabel: "A",
+    floor: "2e verdieping",
+    description: "Ruim stadsappartement met originele details, een luxe badkamer en uitzicht over de Singel.",
   },
 ];
 const tenantsSeed: Tenant[] = [
@@ -225,6 +258,8 @@ const money = (n: number) =>
   new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(
     n,
   );
+const propertyImages = (property: Property) =>
+  property.images?.length ? property.images : property.image ? [property.image] : [];
 const descriptions: Record<ModuleId, string> = {
   dashboard: "",
   profile: "Beheer uw persoonlijke gegevens en profielfoto.",
@@ -299,6 +334,7 @@ export default function Home() {
   const addProperty = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const d = new FormData(event.currentTarget);
+    const images = d.getAll("images").map(String).filter(Boolean);
     setProperties([
       {
         id: Date.now(),
@@ -306,9 +342,10 @@ export default function Home() {
         address: String(d.get("address")),
         type: String(d.get("type")),
         status: "Beschikbaar",
-        points: 0,
+        points: Number(d.get("points")) || 0,
         rent: Number(d.get("rent")) || 0,
-        image: String(d.get("image") || ""),
+        image: images[0] || "",
+        images,
         area: Number(d.get("area")) || undefined,
         rooms: Number(d.get("rooms")) || undefined,
         bedrooms: Number(d.get("bedrooms")) || undefined,
@@ -804,7 +841,7 @@ function Module({
         )}
       </div>
       {active === "wws" ? (
-        <WwsOverview onWws={onWws} />
+        <WwsOverview onWws={onWws} properties={properties} />
       ) : active === "finance" ? (
         <Finance onNotify={onNotify} />
       ) : (
@@ -831,9 +868,8 @@ function Module({
             </button>
           </div>
           {active === "properties" && (
-            <PropertyTable
+            <PropertyGrid
               properties={properties}
-              onWws={onWws}
               onPropertyClick={onPropertyClick}
             />
           )}
@@ -1372,6 +1408,56 @@ function Action({
     </button>
   );
 }
+function PropertyGrid({
+  properties,
+  onPropertyClick,
+}: {
+  properties: Property[];
+  onPropertyClick: (property: Property) => void;
+}) {
+  return (
+    <div className="property-grid">
+      {properties.map((property) => (
+        (() => {
+          const images = propertyImages(property);
+          return (
+        <button
+          type="button"
+          className="property-card"
+          key={property.id}
+          onClick={() => onPropertyClick(property)}
+        >
+          <div className="property-card-image">
+            {images[0] ? (
+              <img src={images[0]} alt={`Foto van ${property.name}`} />
+            ) : (
+              <span aria-hidden="true">⌂</span>
+            )}
+            <span className={`status property-card-status ${property.status.replaceAll(" ", "-").toLowerCase()}`}>
+              {property.status}
+            </span>
+          </div>
+          <div className="property-card-content">
+            <div className="property-card-heading">
+              <div>
+                <h3>{property.name}</h3>
+                <p>{property.address}</p>
+              </div>
+              <strong className="property-card-rent">{property.rent ? money(property.rent) : "—"}<small>/ maand</small></strong>
+            </div>
+            <p className="property-card-description">
+              {property.description || "Nog geen beschrijving toegevoegd."}
+            </p>
+            <span className="property-card-link">Bekijk alle woningdetails →</span>
+          </div>
+        </button>
+          );
+        })()
+      ))}
+    </div>
+  );
+}
+
 function PropertyTable({
   properties,
   onWws,
@@ -1612,7 +1698,17 @@ function DocumentTable({
     </div>
   );
 }
-function WwsOverview({ onWws }: { onWws: () => void }) {
+function WwsOverview({
+  onWws,
+  properties,
+}: {
+  onWws: () => void;
+  properties: Property[];
+}) {
+  const averagePoints = properties.length
+    ? Math.round(properties.reduce((sum, property) => sum + property.points, 0) / properties.length)
+    : 0;
+  const missingLabels = properties.filter((property) => !property.energyLabel).length;
   return (
     <>
       <div className="module-banner">
@@ -1638,14 +1734,14 @@ function WwsOverview({ onWws }: { onWws: () => void }) {
         />
         <Stat
           label="Gemiddeld aantal punten"
-          value="156"
+          value={String(averagePoints)}
           trend="Over uw portefeuille"
           icon="◎"
           color="green"
         />
         <Stat
           label="Te controleren"
-          value="8"
+          value={String(missingLabels)}
           trend="Energielabel ontbreekt"
           icon="!"
           color="orange"
@@ -1704,6 +1800,37 @@ function Finance({ onNotify }: { onNotify: (msg: string) => void }) {
     </>
   );
 }
+function calculateWwsEstimate(input: {
+  regime: "wws" | "wwso";
+  area: number;
+  woz: number;
+  energy: string;
+  heatedRooms: number;
+  heatedOtherRooms: number;
+  kitchen: number;
+  bathroom: number;
+  outdoorArea: number;
+  parking: number;
+}) {
+  const energyPoints: Record<string, [number, number]> = {
+    "A++++": [62, 58], "A+++": [57, 53], "A++": [52, 48], "A+": [47, 43],
+    A: [41, 37], B: [34, 30], C: [22, 15], D: [14, 11], E: [-4, -4],
+    F: [-9, -9], G: [-15, -15],
+  };
+  const [, apartmentEnergyPoints] = energyPoints[input.energy] ?? [0, 0];
+  const spacePoints = Math.max(0, input.area);
+  const heatingPoints = input.heatedRooms * 2 + Math.min(input.heatedOtherRooms, 4);
+  const outdoorPoints = input.outdoorArea > 0 ? Math.min(15, 2 + input.outdoorArea * 0.35) : 0;
+  const basePoints = spacePoints + heatingPoints + apartmentEnergyPoints + input.kitchen + input.bathroom + outdoorPoints + input.parking;
+  const rawWozPoints = input.regime === "wws" && input.woz > 0 && input.area > 0
+    ? input.woz / 16954 + input.woz / input.area / 268
+    : 0;
+  const wozPoints = input.regime === "wws" ? Math.min(rawWozPoints, Math.floor((basePoints * 0.33) / 0.67)) : 0;
+  const points = Math.max(0, Math.round(basePoints + wozPoints));
+  const rent = maximumRent(points, input.regime);
+  return { points, rent, price: Math.round((rent * 12 / 0.045) / 1000) * 1000 };
+}
+
 function PropertyModal({
   onClose,
   onSubmit,
@@ -1711,20 +1838,46 @@ function PropertyModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const [image, setImage] = useState("");
+  const [images, setImages] = useState<string[]>([]);
+  const [estimate, setEstimate] = useState({ points: 0, rent: 0, price: 0 });
+  const updateEstimate = (event: ChangeEvent<HTMLFormElement>) => {
+    const data = new FormData(event.currentTarget);
+    setEstimate(calculateWwsEstimate({
+      regime: String(data.get("type")) === "Onzelfstandig" ? "wwso" : "wws",
+      area: Number(data.get("area")) || 0,
+      woz: Number(data.get("woz")) || 0,
+      energy: String(data.get("energyLabel") || ""),
+      heatedRooms: Number(data.get("heatingRooms")) || 0,
+      heatedOtherRooms: Number(data.get("heatingOtherRooms")) || 0,
+      kitchen: Number(data.get("kitchenPoints")) || 0,
+      bathroom: Number(data.get("bathroomPoints")) || 0,
+      outdoorArea: Number(data.get("outdoorArea")) || 0,
+      parking: Number(data.get("parkingPoints")) || 0,
+    }));
+  };
   const chooseImage = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > 4 * 1024 * 1024) return;
-    const reader = new FileReader();
-    reader.onload = () => setImage(String(reader.result));
-    reader.readAsDataURL(file);
+    const files = Array.from(event.target.files ?? []).filter(
+      (file) => file.type.startsWith("image/") && file.size <= 4 * 1024 * 1024,
+    );
+    if (!files.length) return;
+    Promise.all(
+      files.map(
+        (file) =>
+          new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.readAsDataURL(file);
+          }),
+      ),
+    ).then((newImages) => setImages((current) => [...current, ...newImages]));
+    event.target.value = "";
   };
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <form
         className="modal property-modal"
         onSubmit={onSubmit}
+        onChange={updateEstimate}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="modal-head">
@@ -1740,18 +1893,28 @@ function PropertyModal({
         <div className="property-form-layout">
           <div className="property-upload">
             <div className="property-upload-preview">
-              {image ? (
-                <img src={image} alt="Voorbeeld woning" />
+              {images[0] ? (
+                <img src={images[0]} alt="Voorbeeld woning" />
               ) : (
                 <span>⌂</span>
               )}
             </div>
             <label className="secondary upload-button">
-              Foto toevoegen
-              <input type="file" accept="image/*" onChange={chooseImage} />
+              {images.length ? "Meer foto's toevoegen" : "Foto's toevoegen"}
+              <input type="file" accept="image/*" multiple onChange={chooseImage} />
             </label>
             <small>JPG, PNG of WEBP · max. 4 MB</small>
-            <input type="hidden" name="image" value={image} />
+            {images.length > 1 && (
+              <div className="property-upload-thumbnails">
+                {images.map((image, index) => (
+                  <img key={`${image}-${index}`} src={image} alt={`Foto ${index + 1}`} />
+                ))}
+              </div>
+            )}
+            <small>Meerdere foto&apos;s · max. 4 MB per foto</small>
+            {images.map((image, index) => (
+              <input key={`${image}-${index}`} type="hidden" name="images" value={image} />
+            ))}
           </div>
           <div className="property-fields">
             <div className="form-grid">
@@ -1834,26 +1997,69 @@ function PropertyModal({
                 </select>
               </label>
               <label>
+                WOZ-waarde (€)
+                <input name="woz" type="number" min="0" step="1000" placeholder="bijv. 350000" />
+              </label>
+              <label>
+                Verwarmde vertrekken
+                <input name="heatingRooms" type="number" min="0" placeholder="bijv. 3" />
+              </label>
+              <label>
+                Verwarmde overige ruimtes
+                <input name="heatingOtherRooms" type="number" min="0" max="4" placeholder="bijv. 1" />
+              </label>
+              <label>
+                Keuken
+                <select name="kitchenPoints" defaultValue="4">
+                  <option value="0">Geen volledige keuken · 0 punten</option>
+                  <option value="4">1–2 meter · 4 punten</option>
+                  <option value="7">Langer dan 2 meter · 7 punten</option>
+                </select>
+              </label>
+              <label>
+                Sanitair
+                <select name="bathroomPoints" defaultValue="7">
+                  <option value="0">Geen douche/bad · 0 punten</option>
+                  <option value="4">Douche · 4 punten</option>
+                  <option value="7">Bad of douche/badcombinatie · 7 punten</option>
+                </select>
+              </label>
+              <label>
+                Privé-buitenruimte (m²)
+                <input name="outdoorArea" type="number" min="0" placeholder="bijv. 8" />
+              </label>
+              <label>
+                Parkeerplaats type I
+                <select name="parkingPoints" defaultValue="0">
+                  <option value="0">Geen · 0 punten</option>
+                  <option value="2">Aanwezig · 2 punten</option>
+                </select>
+              </label>
+              <label>
                 Huurprijs per maand (€)
                 <input
                   name="rent"
+                  value={estimate.rent || ""}
+                  readOnly
                   type="number"
                   min="0"
                   step="0.01"
                   placeholder="bijv. 1250"
-                  required
                 />
               </label>
               <label className="wide-field">
                 Vraagprijs (€)
                 <input
                   name="price"
+                  value={estimate.price || ""}
+                  readOnly
                   type="number"
                   min="0"
                   step="0.01"
                   placeholder="bijv. 385000"
                 />
               </label>
+              <input type="hidden" name="points" value={estimate.points || ""} />
             </div>
             <label className="description-field">
               Beschrijving
@@ -1863,6 +2069,11 @@ function PropertyModal({
                 placeholder="Beschrijf bijzonderheden, voorzieningen en andere informatie over de woning..."
               />
             </label>
+            <p className="property-estimate-note">
+              {estimate.points
+                ? `${estimate.points} WWS-punten · huurprijs op basis van prijspeil 1 januari 2026 · vraagprijs indicatief bij 4,5% bruto rendement.`
+                : "Vul de WWS-gegevens in voor een automatische berekening van huurprijs en vraagprijs."}
+            </p>
           </div>
         </div>
         <div className="modal-actions">
@@ -1883,6 +2094,13 @@ function PropertyDetail({
   property: Property;
   onClose: () => void;
 }) {
+  const images = propertyImages(property);
+  const [activeImage, setActiveImage] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const changeImage = (direction: number) => {
+    if (images.length < 2) return;
+    setActiveImage((current) => (current + direction + images.length) % images.length);
+  };
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -1899,12 +2117,30 @@ function PropertyDetail({
             ×
           </button>
         </div>
-        {property.image && (
-          <img
-            className="property-detail-image"
-            src={property.image}
-            alt={property.name}
-          />
+        {images.length > 0 && (
+          <div
+            className="property-detail-gallery"
+            onTouchStart={(event) => setTouchStart(event.touches[0]?.clientX ?? null)}
+            onTouchEnd={(event) => {
+              if (touchStart === null) return;
+              const distance = (event.changedTouches[0]?.clientX ?? touchStart) - touchStart;
+              if (Math.abs(distance) > 40) changeImage(distance < 0 ? 1 : -1);
+              setTouchStart(null);
+            }}
+          >
+            <img
+              className="property-detail-image"
+              src={images[activeImage]}
+              alt={`${property.name}, foto ${activeImage + 1} van ${images.length}`}
+            />
+            {images.length > 1 && (
+              <>
+                <button type="button" className="gallery-arrow gallery-arrow-prev" aria-label="Vorige foto" onClick={() => changeImage(-1)}>‹</button>
+                <button type="button" className="gallery-arrow gallery-arrow-next" aria-label="Volgende foto" onClick={() => changeImage(1)}>›</button>
+                <span className="gallery-counter">{activeImage + 1} / {images.length}</span>
+              </>
+            )}
+          </div>
         )}
         <div className="property-detail-grid">
           <div>
@@ -1953,6 +2189,13 @@ function PropertyDetail({
               {property.price ? money(property.price) : "Niet ingevuld"}
             </strong>
           </div>
+        </div>
+        <div className="property-rent-highlight">
+          <div>
+            <small>Huurprijs per maand</small>
+            <strong>{property.rent ? money(property.rent) : "Niet ingevuld"}</strong>
+          </div>
+          <span>Exclusief eventuele servicekosten</span>
         </div>
         {property.description && (
           <div className="property-description">
@@ -2034,15 +2277,38 @@ function WwsModal({
   onClose: () => void;
   onSave: () => void;
 }) {
-  const [area, setArea] = useState(62);
+  const [regime, setRegime] = useState<"wws" | "wwso">("wws");
+  const [area, setArea] = useState<number | "">(62);
+  const [woz, setWoz] = useState<number | "">(350000);
   const [energy, setEnergy] = useState("A");
-  const [rooms, setRooms] = useState(3);
-  const points = Math.round(
-    area * 0.9 +
-      (energy === "A" ? 30 : energy === "B" ? 24 : 15) +
-      rooms * 4 +
-      12,
-  );
+  const [homeType, setHomeType] = useState<"apartment" | "house">("apartment");
+  const [heatedRooms, setHeatedRooms] = useState<number | "">(3);
+  const [heatedOtherRooms, setHeatedOtherRooms] = useState<number | "">(1);
+  const [kitchen, setKitchen] = useState(4);
+  const [bathroom, setBathroom] = useState(7);
+  const [outdoorArea, setOutdoorArea] = useState<number | "">(8);
+  const [parking, setParking] = useState(0);
+  const energyPoints: Record<string, [number, number]> = {
+    "A++++": [62, 58], "A+++": [57, 53], "A++": [52, 48], "A+": [47, 43],
+    A: [41, 37], B: [34, 30], C: [22, 15], D: [14, 11], E: [-4, -4],
+    F: [-9, -9], G: [-15, -15],
+  };
+  const [houseEnergyPoints, apartmentEnergyPoints] = energyPoints[energy] ?? [0, 0];
+  const energyScore = homeType === "house" ? houseEnergyPoints : apartmentEnergyPoints;
+  const areaValue = Number(area) || 0;
+  const wozValue = Number(woz) || 0;
+  const heatedRoomsValue = Number(heatedRooms) || 0;
+  const heatedOtherRoomsValue = Number(heatedOtherRooms) || 0;
+  const outdoorAreaValue = Number(outdoorArea) || 0;
+  const spacePoints = Math.max(0, areaValue);
+  const heatingPoints = heatedRoomsValue * 2 + Math.min(heatedOtherRoomsValue, 4);
+  const outdoorPoints = outdoorAreaValue > 0 ? Math.min(15, 2 + outdoorAreaValue * 0.35) : 0;
+  const basePoints = spacePoints + heatingPoints + energyScore + Number(kitchen) + Number(bathroom) + outdoorPoints + Number(parking);
+  const rawWozPoints = regime === "wws" && wozValue > 0 && areaValue > 0 ? wozValue / 16954 + wozValue / areaValue / 268 : 0;
+  const cappedWozPoints = regime === "wws" ? Math.min(rawWozPoints, Math.floor((basePoints * 0.33) / 0.67)) : 0;
+  const points = Math.max(0, Math.round(basePoints + cappedWozPoints));
+  const maxRent = maximumRent(points, regime);
+  const sector = regime === "wwso" ? "sociale sector (onzelfstandig)" : points >= 187 ? "vrije sector" : points >= 144 ? "middensector" : "sociale sector";
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -2056,18 +2322,31 @@ function WwsModal({
           </button>
         </div>
         <p className="muted">
-          Vul de basisgegevens in voor een indicatieve berekening.
+          Prijspeil 1 januari 2026. Indicatief totdat alle WWS-rubrieken en bewijsstukken zijn gecontroleerd.
         </p>
         <div className="form-grid">
+          <label>
+            Stelsel
+            <select value={regime} onChange={(e) => setRegime(e.target.value as "wws" | "wwso")}>
+              <option value="wws">WWS · zelfstandige woning</option>
+              <option value="wwso">WWSO · onzelfstandige woonruimte</option>
+            </select>
+          </label>
           <label>
             Oppervlakte (m²)
             <input
               type="number"
               min="1"
               value={area}
-              onChange={(e) => setArea(Number(e.target.value))}
+              onChange={(e) => setArea(e.target.value === "" ? "" : Number(e.target.value))}
             />
           </label>
+          {regime === "wws" && (
+            <label>
+              WOZ-waarde (€)
+              <input type="number" min="0" step="1000" value={woz} onChange={(e) => setWoz(e.target.value === "" ? "" : Number(e.target.value))} />
+            </label>
+          )}
           <label>
             Energielabel
             <select value={energy} onChange={(e) => setEnergy(e.target.value)}>
@@ -2077,23 +2356,62 @@ function WwsModal({
             </select>
           </label>
           <label>
-            Aantal kamers
+            Woningtype
+            <select value={homeType} onChange={(e) => setHomeType(e.target.value as "apartment" | "house")}>
+              <option value="apartment">Appartement / meergezinswoning</option>
+              <option value="house">Eengezinswoning</option>
+            </select>
+          </label>
+          <label>
+            Verwarmde vertrekken
             <input
               type="number"
-              min="1"
-              value={rooms}
-              onChange={(e) => setRooms(Number(e.target.value))}
+              min="0"
+              value={heatedRooms}
+              onChange={(e) => setHeatedRooms(e.target.value === "" ? "" : Number(e.target.value))}
             />
+          </label>
+          <label>
+            Verwarmde overige ruimtes
+            <input type="number" min="0" max="4" value={heatedOtherRooms} onChange={(e) => setHeatedOtherRooms(e.target.value === "" ? "" : Number(e.target.value))} />
+          </label>
+          <label>
+            Keuken (aanrecht + basis)
+            <select value={kitchen} onChange={(e) => setKitchen(Number(e.target.value))}>
+              <option value="0">Geen volledige keuken · 0 punten</option>
+              <option value="4">1–2 meter · 4 punten</option>
+              <option value="7">Langer dan 2 meter · 7 punten</option>
+            </select>
+          </label>
+          <label>
+            Sanitair
+            <select value={bathroom} onChange={(e) => setBathroom(Number(e.target.value))}>
+              <option value="0">Geen douche/bad · 0 punten</option>
+              <option value="4">Douche · 4 punten</option>
+              <option value="7">Bad of douche/badcombinatie · 7 punten</option>
+            </select>
+          </label>
+          <label>
+            Prive-buitenruimte (m²)
+            <input type="number" min="0" value={outdoorArea} onChange={(e) => setOutdoorArea(e.target.value === "" ? "" : Number(e.target.value))} />
+          </label>
+          <label>
+            Parkeerplaats type I
+            <select value={parking} onChange={(e) => setParking(Number(e.target.value))}>
+              <option value="0">Geen · 0 punten</option>
+              <option value="2">Aanwezig · 2 punten</option>
+            </select>
           </label>
         </div>
         <div className="result-box">
-          <span>Indicatief resultaat</span>
+          <span>Indicatief resultaat · {sector}</span>
           <strong>
             {points} <small>punten</small>
           </strong>
           <p>
-            Maximale kale huurprijs <b>{money(points * 6.42 + 138)}</b>
+            Maximale kale huurprijs <b>{money(maxRent)} per maand</b>
           </p>
+          <small>Opbouw: woning {Math.round(spacePoints * 100) / 100} · energie {energyScore} · WOZ {Math.floor(cappedWozPoints)} punten.</small>
         </div>
         <div className="modal-actions">
           <button className="secondary" onClick={onClose}>
@@ -2106,4 +2424,22 @@ function WwsModal({
       </div>
     </div>
   );
+}
+
+function maximumRent(points: number, regime: "wws" | "wwso") {
+  const anchors = regime === "wwso"
+    ? [[0, 0], [60, 611.28], [120, 927.76], [180, 1244.3], [250, 1613.63]]
+    : [[40, 250.26], [110, 706.32], [180, 1186.84], [186, 1228.07], [249, 1608.36], [250, 1613.63]];
+  if (regime === "wws" && points < 40) return 250.26;
+  if (points > 250) return Math.round((1613.63 + (points - 250) * 5.27) * 100) / 100;
+  const boundedPoints = Math.max(0, points);
+  for (let index = 1; index < anchors.length; index += 1) {
+    const [lowerPoints, lowerRent] = anchors[index - 1];
+    const [upperPoints, upperRent] = anchors[index];
+    if (boundedPoints <= upperPoints) {
+      const ratio = (boundedPoints - lowerPoints) / (upperPoints - lowerPoints);
+      return Math.round((lowerRent + ratio * (upperRent - lowerRent)) * 100) / 100;
+    }
+  }
+  return anchors[anchors.length - 1][1];
 }

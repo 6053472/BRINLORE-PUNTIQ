@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
 import { PageHead, SettingRow, Toggle } from './ui'
@@ -24,7 +24,8 @@ function Feedback({ result }: { result: { ok: boolean; text: string } | null }) 
 }
 
 export function ProfilePanel() {
-  const { user, updateAccount, notify } = useApp()
+  const { user, updateAccount, notify, setDraftUsername } = useApp()
+  useEffect(() => () => setDraftUsername(null), [setDraftUsername])
   const [account, setAccount] = useState({ username: user.username, email: user.email })
   const [profile, setProfile] = useState<UserProfile>(user.profile)
   const [accountResult, setAccountResult] = useState<{ ok: boolean; text: string } | null>(null)
@@ -105,7 +106,7 @@ export function ProfilePanel() {
           </Card>
           <Card icon="lock" title="Inloggegevens" text="Gebruikersnaam en e-mailadres voor uw account.">
             <form className="form-grid" onSubmit={saveAccount}>
-              <label>Gebruikersnaam<input value={account.username} onChange={event => setAccount(current => ({ ...current, username: event.target.value }))} required autoComplete="username" /></label>
+              <label>Gebruikersnaam<input value={account.username} onChange={event => { setAccount(current => ({ ...current, username: event.target.value })); setDraftUsername(event.target.value) }} required autoComplete="username" /></label>
               <label>E-mailadres<input type="email" value={account.email} onChange={event => setAccount(current => ({ ...current, email: event.target.value }))} required autoComplete="email" /></label>
               <div className="wide-field form-actions"><Feedback result={accountResult} /><button className="button" disabled={busy}>Opslaan</button></div>
             </form>

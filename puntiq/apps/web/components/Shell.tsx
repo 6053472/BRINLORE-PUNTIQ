@@ -43,7 +43,9 @@ function readIds(): string[] {
 }
 
 export function Shell() {
-  const { user, properties, records, logout } = useApp()
+  const { user, draftUsername, properties, records, logout } = useApp()
+  const fullName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ')
+  const displayName = fullName || draftUsername?.trim() || user.username
   const [active, setActive] = useState<ModuleId>('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
   const [popover, setPopover] = useState<'profile' | 'notifications' | 'search' | null>(null)
@@ -223,7 +225,7 @@ export function Shell() {
                 <div className="popover profile-menu">
                   <div className="profile-menu-head">
                     <span className="avatar-button static">{avatar}</span>
-                    <div><strong>{user.username}</strong><small>{user.email}</small></div>
+                    <div><strong>{displayName}</strong><small>{user.email}</small></div>
                   </div>
                   <button type="button" onClick={() => go('profile')}><Icon name="user" size={16} /> Profiel</button>
                   <button type="button" onClick={() => go('settings')}><Icon name="settings" size={16} /> Instellingen</button>

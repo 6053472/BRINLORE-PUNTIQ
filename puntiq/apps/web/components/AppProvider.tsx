@@ -10,6 +10,8 @@ type ProfilePatch = { username?: string; email?: string; avatar?: string; profil
 
 type AppContextValue = {
   user: User
+  draftUsername: string | null
+  setDraftUsername: (value: string | null) => void
   loading: boolean
   properties: Property[]
   records: RecordMap
@@ -63,6 +65,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<{ ok: boolea
 
 export function AppProvider({ initialUser, children }: { initialUser: User; children: ReactNode }) {
   const [user, setUser] = useState<User>(initialUser)
+  const [draftUsername, setDraftUsername] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [properties, setProperties] = useState<Property[]>([])
   const [records, setRecords] = useState<RecordMap>(emptyRecords)
@@ -161,8 +164,8 @@ export function AppProvider({ initialUser, children }: { initialUser: User; chil
   }, [])
 
   const value = useMemo<AppContextValue>(
-    () => ({ user, loading, properties, records, notify, confirm, saveProperty, removeProperty, saveRecord, removeRecord, updateAccount, logout }),
-    [user, loading, properties, records, notify, confirm, saveProperty, removeProperty, saveRecord, removeRecord, updateAccount, logout],
+    () => ({ user, draftUsername, setDraftUsername, loading, properties, records, notify, confirm, saveProperty, removeProperty, saveRecord, removeRecord, updateAccount, logout }),
+    [user, draftUsername, loading, properties, records, notify, confirm, saveProperty, removeProperty, saveRecord, removeRecord, updateAccount, logout],
   )
 
   const answer = (result: boolean) => {

@@ -1,18 +1,18 @@
-import { createUser, usernameExists } from '../../../../lib/db'
+import { createUser } from '../../../../lib/db'
+import { getSite, logAudit } from '../../../../lib/admin'
+import { json } from '../../../../lib/auth'
 
 export const runtime = 'nodejs'
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-}
-
 export async function POST(request: Request) {
+  if (!getSite().registrationOpen) return json({ error: 'Registreren is momenteel niet mogelijk. Neem contact op met de beheerder.' }, 403)
   const body = await request.json().catch(() => null)
-  const username = typeof body?.username === 'string' ? body.username : ''
-  const email = typeof body?.email === 'string' ? body.email : ''
-  const password = typeof body?.password === 'string' ? body.password : ''
-  if (usernameExists(username)) return json({ error: 'Dit account bestaat al. Gebruik de loginpagina om in te loggen, of kies een andere gebruikersnaam.' }, 409)
-  const user = createUser(username, email, password)
-  if (!user) return json({ error: 'Vul een gebruikersnaam en e-mail in. Het wachtwoord moet minimaal 8 tekens bevatten.' }, 400)
+  const result = createUser(
+    typeof body?.username === 'string' ? body.username : '',
+    typeof body?.email === 'string' ? body.email : '',
+    typeof body?.password === 'string' ? body.password : '',
+  )
+  if (!result.user) return json({ error: result.error }, result.error?.includes('bestaat al') || result.error?.includes('in gebruik') ? 409 : 400)
+  logAudit({ id: result.user.id, name: result.user.username }, 'user.register', result.user.username)
   return json({ message: 'Account aangemaakt. Log nu in.' }, 201)
 }

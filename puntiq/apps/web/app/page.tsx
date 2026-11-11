@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { berekenWWS, type Energielabel, type OpslagType, type WoningType, type WwsInput } from "../lib/wws";
 
 type ModuleId =
   | "dashboard"
@@ -599,7 +600,6 @@ export default function Home() {
     </main>
   );
 }
-
 function Dashboard({
   properties,
   maintenance,
@@ -1775,23 +1775,25 @@ function calculateWwsEstimate(input: {
   outdoorArea: number;
   parking: number;
 }) {
-  const energyPoints: Record<string, [number, number]> = {
-    "A++++": [62, 58], "A+++": [57, 53], "A++": [52, 48], "A+": [47, 43],
-    A: [41, 37], B: [34, 30], C: [22, 15], D: [14, 11], E: [-4, -4],
-    F: [-9, -9], G: [-15, -15],
-  };
-  const [, apartmentEnergyPoints] = energyPoints[input.energy] ?? [0, 0];
-  const spacePoints = Math.max(0, input.area);
-  const heatingPoints = input.heatedRooms * 2 + Math.min(input.heatedOtherRooms, 4);
-  const outdoorPoints = input.outdoorArea > 0 ? Math.min(15, 2 + input.outdoorArea * 0.35) : 0;
-  const basePoints = spacePoints + heatingPoints + apartmentEnergyPoints + input.kitchen + input.bathroom + outdoorPoints + input.parking;
-  const rawWozPoints = input.regime === "wws" && input.woz > 0 && input.area > 0
-    ? input.woz / 16954 + input.woz / input.area / 268
-    : 0;
-  const wozPoints = input.regime === "wws" ? Math.min(rawWozPoints, Math.floor((basePoints * 0.33) / 0.67)) : 0;
-  const points = Math.max(0, Math.round(basePoints + wozPoints));
-  const rent = maximumRent(points, input.regime);
-  return { points, rent, price: Math.round((rent * 12 / 0.045) / 1000) * 1000 };
+  const result = berekenWWS({
+    m2Vertrekken: input.area,
+    m2OverigeRuimten: 0,
+    verwarmdeVertrekken: input.heatedRooms,
+    verwarmdeOverigeRuimten: input.heatedOtherRooms,
+    gekoeldeVertrekken: 0,
+    energielabel: (input.energy || "GEEN") as Energielabel,
+    bouwjaar: 0,
+    woningType: "meergezins",
+    aanrechtLengteMeters: input.kitchen >= 7 ? 2 : input.kitchen >= 4 ? 1 : 0,
+    keukenExtraPunten: Math.max(0, input.kitchen - (input.kitchen >= 7 ? 7 : input.kitchen >= 4 ? 4 : 0)),
+    sanitairPunten: input.bathroom,
+    m2BuitenruimtePrive: input.outdoorArea,
+    wozWaarde: input.woz,
+    isCoropAmsterdamUtrechtKlein: false,
+    opslagType: "geen",
+  });
+  const rent = result.wettelijkeMaximumhuur ?? result.huurprijsMetOpslag;
+  return { points: result.totaalPunten, rent, price: Math.round((rent * 12 / 0.045) / 1000) * 1000 };
 }
 
 function PropertyModal({
@@ -2245,38 +2247,16 @@ function WwsModal({
   onClose: () => void;
   onSave: () => void;
 }) {
-  const [regime, setRegime] = useState<"wws" | "wwso">("wws");
-  const [area, setArea] = useState<number | "">(62);
-  const [woz, setWoz] = useState<number | "">(350000);
-  const [energy, setEnergy] = useState("A");
-  const [homeType, setHomeType] = useState<"apartment" | "house">("apartment");
-  const [heatedRooms, setHeatedRooms] = useState<number | "">(3);
-  const [heatedOtherRooms, setHeatedOtherRooms] = useState<number | "">(1);
-  const [kitchen, setKitchen] = useState(4);
-  const [bathroom, setBathroom] = useState(7);
-  const [outdoorArea, setOutdoorArea] = useState<number | "">(8);
-  const [parking, setParking] = useState(0);
-  const energyPoints: Record<string, [number, number]> = {
-    "A++++": [62, 58], "A+++": [57, 53], "A++": [52, 48], "A+": [47, 43],
-    A: [41, 37], B: [34, 30], C: [22, 15], D: [14, 11], E: [-4, -4],
-    F: [-9, -9], G: [-15, -15],
-  };
-  const [houseEnergyPoints, apartmentEnergyPoints] = energyPoints[energy] ?? [0, 0];
-  const energyScore = homeType === "house" ? houseEnergyPoints : apartmentEnergyPoints;
-  const areaValue = Number(area) || 0;
-  const wozValue = Number(woz) || 0;
-  const heatedRoomsValue = Number(heatedRooms) || 0;
-  const heatedOtherRoomsValue = Number(heatedOtherRooms) || 0;
-  const outdoorAreaValue = Number(outdoorArea) || 0;
-  const spacePoints = Math.max(0, areaValue);
-  const heatingPoints = heatedRoomsValue * 2 + Math.min(heatedOtherRoomsValue, 4);
-  const outdoorPoints = outdoorAreaValue > 0 ? Math.min(15, 2 + outdoorAreaValue * 0.35) : 0;
-  const basePoints = spacePoints + heatingPoints + energyScore + Number(kitchen) + Number(bathroom) + outdoorPoints + Number(parking);
-  const rawWozPoints = regime === "wws" && wozValue > 0 && areaValue > 0 ? wozValue / 16954 + wozValue / areaValue / 268 : 0;
-  const cappedWozPoints = regime === "wws" ? Math.min(rawWozPoints, Math.floor((basePoints * 0.33) / 0.67)) : 0;
-  const points = Math.max(0, Math.round(basePoints + cappedWozPoints));
-  const maxRent = maximumRent(points, regime);
-  const sector = regime === "wwso" ? "sociale sector (onzelfstandig)" : points >= 187 ? "vrije sector" : points >= 144 ? "middensector" : "sociale sector";
+  const [input, setInput] = useState<WwsInput>({
+    m2Vertrekken: 52, m2OverigeRuimten: 10, verwarmdeVertrekken: 3,
+    verwarmdeOverigeRuimten: 1, gekoeldeVertrekken: 0, energielabel: "A",
+    bouwjaar: 2005, woningType: "meergezins", aanrechtLengteMeters: 2,
+    keukenExtraPunten: 4, sanitairPunten: 7, m2BuitenruimtePrive: 8,
+    wozWaarde: 350000, isCoropAmsterdamUtrechtKlein: false, opslagType: "geen",
+  });
+  const result = berekenWWS(input);
+  const setNumber = (name: keyof WwsInput, value: string) =>
+    setInput((current) => ({ ...current, [name]: value === "" ? 0 : Number(value) }));
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -2294,92 +2274,110 @@ function WwsModal({
         </p>
         <div className="form-grid">
           <label>
-            Stelsel
-            <select value={regime} onChange={(e) => setRegime(e.target.value as "wws" | "wwso")}>
-              <option value="wws">WWS · zelfstandige woning</option>
-              <option value="wwso">WWSO · onzelfstandige woonruimte</option>
+            Woningtype
+            <select value={input.woningType} onChange={(e) => setInput((current) => ({ ...current, woningType: e.target.value as WoningType }))}>
+              <option value="meergezins">Appartement / meergezinswoning</option>
+              <option value="eengezins">Eengezinswoning</option>
             </select>
           </label>
           <label>
-            Oppervlakte (m²)
+            Vertrekken (m²)
             <input
               type="number"
-              min="1"
-              value={area}
-              onChange={(e) => setArea(e.target.value === "" ? "" : Number(e.target.value))}
+              min="0"
+              value={input.m2Vertrekken || ""}
+              onChange={(e) => setNumber("m2Vertrekken", e.target.value)}
             />
           </label>
-          {regime === "wws" && (
-            <label>
-              WOZ-waarde (€)
-              <input type="number" min="0" step="1000" value={woz} onChange={(e) => setWoz(e.target.value === "" ? "" : Number(e.target.value))} />
-            </label>
-          )}
+          <label>
+            Overige ruimten (m²)
+            <input type="number" min="0" step="0.25" value={input.m2OverigeRuimten || ""} onChange={(e) => setNumber("m2OverigeRuimten", e.target.value)} />
+          </label>
+          <label>
+            WOZ-waarde (€)
+            <input type="number" min="0" step="1000" value={input.wozWaarde || ""} onChange={(e) => setNumber("wozWaarde", e.target.value)} />
+          </label>
           <label>
             Energielabel
-            <select value={energy} onChange={(e) => setEnergy(e.target.value)}>
-              {["A++", "A+", "A", "B", "C", "D", "E", "F", "G"].map((x) => (
+            <select value={input.energielabel} onChange={(e) => setInput((current) => ({ ...current, energielabel: e.target.value as Energielabel }))}>
+              {["A++++", "A+++", "A++", "A+", "A", "B", "C", "D", "E", "F", "G", "GEEN"].map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>
           </label>
           <label>
-            Woningtype
-            <select value={homeType} onChange={(e) => setHomeType(e.target.value as "apartment" | "house")}>
-              <option value="apartment">Appartement / meergezinswoning</option>
-              <option value="house">Eengezinswoning</option>
-            </select>
+            Bouwjaar
+            <input type="number" min="0" value={input.bouwjaar || ""} onChange={(e) => setNumber("bouwjaar", e.target.value)} />
           </label>
           <label>
             Verwarmde vertrekken
             <input
               type="number"
               min="0"
-              value={heatedRooms}
-              onChange={(e) => setHeatedRooms(e.target.value === "" ? "" : Number(e.target.value))}
+              value={input.verwarmdeVertrekken || ""}
+              onChange={(e) => setNumber("verwarmdeVertrekken", e.target.value)}
             />
           </label>
           <label>
             Verwarmde overige ruimtes
-            <input type="number" min="0" max="4" value={heatedOtherRooms} onChange={(e) => setHeatedOtherRooms(e.target.value === "" ? "" : Number(e.target.value))} />
+            <input type="number" min="0" value={input.verwarmdeOverigeRuimten || ""} onChange={(e) => setNumber("verwarmdeOverigeRuimten", e.target.value)} />
           </label>
           <label>
-            Keuken (aanrecht + basis)
-            <select value={kitchen} onChange={(e) => setKitchen(Number(e.target.value))}>
-              <option value="0">Geen volledige keuken · 0 punten</option>
-              <option value="4">1–2 meter · 4 punten</option>
-              <option value="7">Langer dan 2 meter · 7 punten</option>
+            Gekoelde vertrekken
+            <input type="number" min="0" value={input.gekoeldeVertrekken || ""} onChange={(e) => setNumber("gekoeldeVertrekken", e.target.value)} />
+          </label>
+          <label>
+            Aanrechtlengte (meter)
+            <input type="number" min="0" step="0.1" value={input.aanrechtLengteMeters || ""} onChange={(e) => setNumber("aanrechtLengteMeters", e.target.value)} />
+          </label>
+          <label>
+            Keuken extra punten
+            <input type="number" min="0" step="0.25" value={input.keukenExtraPunten || ""} onChange={(e) => setNumber("keukenExtraPunten", e.target.value)} />
+          </label>
+          <label>
+            Sanitairpunten
+            <input type="number" min="0" step="0.25" value={input.sanitairPunten || ""} onChange={(e) => setNumber("sanitairPunten", e.target.value)} />
+          </label>
+          <label>
+            Privé-buitenruimte (m²)
+            <input type="number" min="0" step="0.25" value={input.m2BuitenruimtePrive || ""} onChange={(e) => setNumber("m2BuitenruimtePrive", e.target.value)} />
+          </label>
+          <label>
+            Opslag
+            <select value={input.opslagType} onChange={(e) => setInput((current) => ({ ...current, opslagType: e.target.value as OpslagType }))}>
+              <option value="geen">Geen opslag</option>
+              <option value="nieuwbouw_middenhuur">Nieuwbouw middenhuur (+10%)</option>
+              <option value="rijksmonument">Rijksmonument (+35%)</option>
+              <option value="gemeentelijk_monument">Gemeentelijk monument (+15%)</option>
+              <option value="beschermd_stadsgezicht">Beschermd stadsgezicht (+5%)</option>
             </select>
           </label>
-          <label>
-            Sanitair
-            <select value={bathroom} onChange={(e) => setBathroom(Number(e.target.value))}>
-              <option value="0">Geen douche/bad · 0 punten</option>
-              <option value="4">Douche · 4 punten</option>
-              <option value="7">Bad of douche/badcombinatie · 7 punten</option>
-            </select>
-          </label>
-          <label>
-            Prive-buitenruimte (m²)
-            <input type="number" min="0" value={outdoorArea} onChange={(e) => setOutdoorArea(e.target.value === "" ? "" : Number(e.target.value))} />
-          </label>
-          <label>
-            Parkeerplaats type I
-            <select value={parking} onChange={(e) => setParking(Number(e.target.value))}>
-              <option value="0">Geen · 0 punten</option>
-              <option value="2">Aanwezig · 2 punten</option>
-            </select>
+          <label className="checkbox-label">
+            <input type="checkbox" checked={input.isCoropAmsterdamUtrechtKlein} onChange={(e) => setInput((current) => ({ ...current, isCoropAmsterdamUtrechtKlein: e.target.checked }))} />
+            COROP Amsterdam/Utrecht én kleiner dan 40 m²
           </label>
         </div>
         <div className="result-box">
-          <span>Indicatief resultaat · {sector}</span>
+          <span>{result.huurSegment}</span>
           <strong>
-            {points} <small>punten</small>
+            {result.totaalPunten} <small>punten</small>
           </strong>
           <p>
-            Maximale kale huurprijs <b>{money(maxRent)} per maand</b>
+            {result.wettelijkeMaximumhuur === null ? "Geen wettelijke maximale huurprijs" : <>Maximale kale huurprijs <b>{money(result.wettelijkeMaximumhuur)}</b> per maand</>}
           </p>
-          <small>Opbouw: woning {Math.round(spacePoints * 100) / 100} · energie {energyScore} · WOZ {Math.floor(cappedWozPoints)} punten.</small>
+          {result.opslagPercentage > 0 && <small>Inclusief {result.opslagPercentage * 100}% opslag. Tabelhuur: {money(result.tabelHuurprijs)}.</small>}
+        </div>
+        <div className="wws-breakdown" aria-label="Puntenuitsplitsing">
+          <strong>Puntenuitsplitsing</strong>
+          <div><span>Vertrekken</span><b>{result.punten.vertrekken}</b></div>
+          <div><span>Overige ruimten</span><b>{result.punten.overigeRuimten}</b></div>
+          <div><span>Verwarming / verkoeling</span><b>{result.punten.verwarming + result.punten.verkoeling}</b></div>
+          <div><span>Energieprestatie</span><b>{result.punten.energie}</b></div>
+          <div><span>Keuken (basis + extra)</span><b>{result.punten.keuken}</b></div>
+          <div><span>Sanitair</span><b>{result.punten.sanitair}</b></div>
+          <div><span>Buitenruimte</span><b>{result.punten.buitenruimte}</b></div>
+          <div><span>Basispunten</span><b>{result.punten.basis}</b></div>
+          <div><span>WOZ-punten{result.wozCapToegepast ? " (33%-cap toegepast)" : ""}</span><b>{result.punten.wozDefinitief}</b></div>
         </div>
         <div className="modal-actions">
           <button className="secondary" onClick={onClose}>
@@ -2394,20 +2392,3 @@ function WwsModal({
   );
 }
 
-function maximumRent(points: number, regime: "wws" | "wwso") {
-  const anchors = regime === "wwso"
-    ? [[0, 0], [60, 611.28], [120, 927.76], [180, 1244.3], [250, 1613.63]]
-    : [[40, 250.26], [110, 706.32], [180, 1186.84], [186, 1228.07], [249, 1608.36], [250, 1613.63]];
-  if (regime === "wws" && points < 40) return 250.26;
-  if (points > 250) return Math.round((1613.63 + (points - 250) * 5.27) * 100) / 100;
-  const boundedPoints = Math.max(0, points);
-  for (let index = 1; index < anchors.length; index += 1) {
-    const [lowerPoints, lowerRent] = anchors[index - 1];
-    const [upperPoints, upperRent] = anchors[index];
-    if (boundedPoints <= upperPoints) {
-      const ratio = (boundedPoints - lowerPoints) / (upperPoints - lowerPoints);
-      return Math.round((lowerRent + ratio * (upperRent - lowerRent)) * 100) / 100;
-    }
-  }
-  return anchors[anchors.length - 1][1];
-}

@@ -777,6 +777,45 @@ td span {
   color: var(--ink);
   margin-left: 5px;
 }
+.wws-modal {
+  width: min(820px, 100%);
+}
+.wws-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.wws-breakdown > strong {
+  grid-column: 1 / -1;
+  padding: 11px 13px;
+  background: #f7f4ee;
+  font: 700 12px Manrope;
+}
+.wws-breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 13px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+}
+.wws-breakdown > div:nth-child(odd) {
+  border-left: 1px solid var(--line);
+}
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+  grid-column: span 2;
+}
+.modal .checkbox-label input {
+  width: auto;
+  margin: 0;
+}
 .toast {
   position: fixed;
   right: 28px;
@@ -2602,6 +2641,25 @@ label {
 .dark-mode .property-card,
 .dark-mode .property-rent-highlight {
   background: #202d43;
+}
+.dark-mode .property-card {
+  border-color: #3a4a63;
+  box-shadow: 0 12px 28px #08101f38;
+}
+.dark-mode .property-card-content {
+  background: #202d43;
+}
+.dark-mode .property-card-image {
+  background: linear-gradient(135deg, #263a54, #1a2940);
+}
+.dark-mode .property-card:hover,
+.dark-mode .property-card:focus-visible {
+  border-color: var(--gold);
+  box-shadow: 0 14px 32px #08101f55;
+}
+.dark-mode .property-card-rent,
+.dark-mode .property-card-link {
+  color: #d7b36b;
 }
 .dark-mode .property-fields input[readonly] {
   background: #263a70;

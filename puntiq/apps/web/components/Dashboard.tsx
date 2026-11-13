@@ -10,14 +10,14 @@ import { greeting, longDate, money, moneyShort } from '../lib/format'
 import type { ModuleId, Property } from '../lib/types'
 
 export function Dashboard({ onNavigate, onAdd, onWws, onSelect }: {
-  onNavigate: (id: ModuleId) => void
+  onNavigate: (id: ModuleId, recordId?: number) => void
   onAdd: () => void
   onWws: () => void
   onSelect: (property: Property) => void
 }) {
   const { user, properties, records, loading } = useApp()
   const notifications = useMemo(
-    () => buildNotifications({ contracts: records.contracts, maintenance: records.maintenance, payments: records.payments, properties, settings: user.settings }),
+    () => buildNotifications({ contracts: records.contracts, maintenance: records.maintenance, invoices: records.invoices, payments: records.payments, properties, settings: user.settings }),
     [records, properties, user.settings],
   )
 
@@ -76,7 +76,7 @@ export function Dashboard({ onNavigate, onAdd, onWws, onSelect }: {
           ) : (
             <div className="actions-list">
               {notifications.slice(0, 5).map(item => (
-                <button type="button" key={item.id} className="action" onClick={() => onNavigate(item.module)}>
+                <button type="button" key={item.id} className="action" onClick={() => onNavigate(item.module, item.recordId)}>
                   <span className={`action-icon ${item.tone}`}><Icon name={item.module === 'maintenance' ? 'wrench' : item.module === 'finance' ? 'euro' : 'file'} size={17} /></span>
                   <div><strong>{item.title}</strong><p>{item.detail}</p></div>
                   <time>{item.when}</time>

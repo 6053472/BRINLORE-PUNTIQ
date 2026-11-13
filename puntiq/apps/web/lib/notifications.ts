@@ -1,5 +1,6 @@
 import { addDays, daysBetween, formatDate, money, today } from './format'
-import type { Contract, Maintenance, ModuleId, Payment, Property, UserSettings } from './types'
+import { invoiceViews } from './finance'
+import type { Contract, Invoice, Maintenance, ModuleId, Payment, Property, UserSettings } from './types'
 
 export type AppNotification = {
   id: string
@@ -8,11 +9,14 @@ export type AppNotification = {
   detail: string
   when: string
   module: ModuleId
+  /** Optioneel: het record waar de melding over gaat (bijv. contract-id), zodat het direct kan worden geopend. */
+  recordId?: number
 }
 
 type Source = {
   contracts: Contract[]
   maintenance: Maintenance[]
+  invoices: Invoice[]
   payments: Payment[]
   properties: Property[]
   settings: UserSettings
@@ -23,12 +27,16 @@ export type ContractState = 'Concept' | 'Actief' | 'Verloopt binnenkort' | 'Verl
 /** Effectieve status: een actief contract kan binnenkort verlopen of al verlopen zijn. */
 export function contractState(contract: Contract, reminderDays: number, now = today()): ContractState {
   if (contract.status !== 'Actief') return contract.status as ContractState
+  if (!contract.end) return 'Actief' // onbepaalde tijd
   const left = daysBetween(now, contract.end)
   if (left < 0) return 'Verlopen'
   return left <= reminderDays ? 'Verloopt binnenkort' : 'Actief'
 }
 
-export const isOverdue = (payment: Payment, now = today()) => payment.status === 'Openstaand' && payment.dueDate < now
+/** Dagen tot de einddatum, of null bij onbepaalde tijd. */
+export function daysUntilEnd(contract: Contract, now = today()) {
+  return contract.end ? daysBetween(now, contract.end) : null
+}
 
 export function buildNotifications(source: Source): AppNotification[] {
   const { settings } = source
@@ -45,11 +53,14 @@ export function buildNotifications(source: Source): AppNotification[] {
   if (settings.notifyContracts || settings.notifyIndexation) {
     for (const contract of source.contracts) {
       if (contract.status !== 'Actief') continue
-      const left = daysBetween(now, contract.end)
-      if (settings.notifyContracts && left < 0) {
-        list.push({ id: `c${contract.id}-expired`, tone: 'urgent', title: 'Contract verlopen', detail: `${contract.property} — ${contract.tenant}`, when: formatDate(contract.end), module: 'contracts' })
-      } else if (settings.notifyContracts && left <= settings.contractReminderDays) {
-        list.push({ id: `c${contract.id}-ending`, tone: 'warning', title: `Contract verloopt over ${left} ${left === 1 ? 'dag' : 'dagen'}`, detail: `${contract.property} — ${contract.tenant}`, when: formatDate(contract.end), module: 'contracts' })
+      const left = contract.end ? daysBetween(now, contract.end) : null
+      const detail = `${contract.property} — ${contract.tenant}`
+      if (settings.notifyContracts && left !== null && left < 0) {
+        list.push({ id: `c${contract.id}-expired`, tone: 'urgent', title: 'Contract verlopen', detail, when: formatDate(contract.end), module: 'contracts', recordId: contract.id })
+      } else if (settings.notifyContracts && left !== null && left <= settings.contractReminderDays) {
+        // Binnen 30 dagen krijgt de melding voorrang (rood); daarvoor is het een waarschuwing.
+        const title = left === 0 ? 'Contract loopt vandaag af' : `Contract loopt af over ${left} ${left === 1 ? 'dag' : 'dagen'}`
+        list.push({ id: `c${contract.id}-ending-${contract.end}`, tone: left <= 30 ? 'urgent' : 'warning', title, detail, when: formatDate(contract.end), module: 'contracts', recordId: contract.id })
       }
       if (settings.notifyIndexation && contract.rent) {
         const anniversary = new Date(`${contract.start}T00:00:00`)
@@ -60,19 +71,20 @@ export function buildNotifications(source: Source): AppNotification[] {
         const until = daysBetween(now, iso)
         if (until > 0 && until <= 60 && contract.start < iso) {
           const proposed = contract.rent * (1 + settings.rentIndexation / 100)
-          list.push({ id: `c${contract.id}-index-${iso}`, tone: 'info', title: 'Jaarlijkse huurindexatie', detail: `${contract.property}: ${money(contract.rent)} → ${money(proposed)} (+${settings.rentIndexation}%)`, when: formatDate(iso), module: 'contracts' })
+          list.push({ id: `c${contract.id}-index-${iso}`, tone: 'info', title: 'Jaarlijkse huurindexatie', detail: `${contract.property}: ${money(contract.rent)} → ${money(proposed)} (+${settings.rentIndexation}%)`, when: formatDate(iso), module: 'contracts', recordId: contract.id })
         }
       }
     }
   }
 
   if (settings.notifyPayments) {
-    for (const payment of source.payments) {
-      if (payment.status !== 'Openstaand') continue
-      if (payment.dueDate < now) {
-        list.push({ id: `p${payment.id}-late`, tone: 'urgent', title: `Betaling achterstallig: ${money(payment.amount)}`, detail: `${payment.description}${payment.tenant ? ` — ${payment.tenant}` : ''}`, when: formatDate(payment.dueDate), module: 'finance' })
-      } else if (payment.dueDate <= addDays(now, settings.paymentReminderDays)) {
-        list.push({ id: `p${payment.id}-soon`, tone: 'info', title: `Betaling binnenkort: ${money(payment.amount)}`, detail: payment.description, when: formatDate(payment.dueDate), module: 'finance' })
+    // Op basis van het openstaande saldo per factuur: deelbetalingen tellen mee.
+    for (const invoice of invoiceViews(source.invoices, source.payments, now)) {
+      const detail = `${invoice.number} · ${invoice.description}${invoice.tenant ? ` — ${invoice.tenant}` : ''}`
+      if (invoice.state === 'Achterstallig') {
+        list.push({ id: `i${invoice.id}-late-${invoice.balance}`, tone: 'urgent', title: `Achterstallig: ${money(invoice.balance)}`, detail, when: formatDate(invoice.dueDate), module: 'finance', recordId: invoice.id })
+      } else if ((invoice.state === 'Openstaand' || invoice.state === 'Deels betaald') && invoice.dueDate <= addDays(now, settings.paymentReminderDays)) {
+        list.push({ id: `i${invoice.id}-soon`, tone: 'info', title: `Vervalt binnenkort: ${money(invoice.balance)}`, detail, when: formatDate(invoice.dueDate), module: 'finance', recordId: invoice.id })
       }
     }
   }

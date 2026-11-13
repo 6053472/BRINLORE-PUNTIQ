@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { dataDirectory } from './paths'
+import { convertLegacyPayment, nextInvoiceNumber } from './finance'
 
 type SqliteStatement = {
   all: (...params: unknown[]) => Record<string, unknown>[]
@@ -25,7 +26,7 @@ export function openDatabase(): SqliteDatabase {
   return database
 }
 
-export type RecordKind = 'tenants' | 'contracts' | 'maintenance' | 'documents' | 'payments' | 'wws' | 'wwso'
+export type RecordKind = 'tenants' | 'contracts' | 'maintenance' | 'documents' | 'invoices' | 'payments' | 'wws' | 'wwso'
 type FieldSpec = { type: 'string' | 'number' | 'date' | 'enum' | 'file'; required?: boolean; options?: string[]; max?: number; min?: number }
 
 export const schemas: Record<RecordKind, Record<string, FieldSpec>> = {
@@ -40,8 +41,12 @@ export const schemas: Record<RecordKind, Record<string, FieldSpec>> = {
   contracts: {
     property: { type: 'string', required: true, max: 160 },
     tenant: { type: 'string', required: true, max: 120 },
+    propertyId: { type: 'number', min: 0 },
+    tenantId: { type: 'number', min: 0 },
+    term: { type: 'enum', options: ['Onbepaalde tijd', 'Bepaalde tijd'] },
     start: { type: 'date', required: true },
-    end: { type: 'date', required: true },
+    end: { type: 'date' },
+    terminatedOn: { type: 'date' },
     rent: { type: 'number', min: 0 },
     deposit: { type: 'number', min: 0 },
     status: { type: 'enum', options: ['Concept', 'Actief', 'Beëindigd'] },
@@ -61,20 +66,39 @@ export const schemas: Record<RecordKind, Record<string, FieldSpec>> = {
     name: { type: 'string', required: true, max: 200 },
     category: { type: 'enum', options: ['Contracten', 'WWS / WWSO', 'Onderhoud', 'Financieel', 'Overig'] },
     property: { type: 'string', max: 160 },
+    contractId: { type: 'number', min: 0 },
     date: { type: 'date' },
     size: { type: 'number', min: 0 },
     mime: { type: 'string', max: 100 },
     file: { type: 'file' },
   },
-  payments: {
+  invoices: {
+    number: { type: 'string', max: 40 },
     description: { type: 'string', required: true, max: 200 },
-    property: { type: 'string', max: 160 },
-    tenant: { type: 'string', max: 120 },
     type: { type: 'enum', options: ['Huur', 'Servicekosten', 'Borg', 'Onderhoud', 'Overig'] },
+    tenant: { type: 'string', max: 120 },
+    tenantId: { type: 'number', min: 0 },
+    property: { type: 'string', max: 160 },
+    propertyId: { type: 'number', min: 0 },
+    contractId: { type: 'number', min: 0 },
+    period: { type: 'string', max: 7 },
     amount: { type: 'number', required: true, min: 0 },
+    issueDate: { type: 'date', required: true },
     dueDate: { type: 'date', required: true },
-    status: { type: 'enum', options: ['Openstaand', 'Betaald'] },
-    paidDate: { type: 'date' },
+    status: { type: 'enum', options: ['Open', 'Geannuleerd'] },
+    notes: { type: 'string', max: 2000 },
+  },
+  payments: {
+    amount: { type: 'number', required: true, min: 0 },
+    receivedOn: { type: 'date', required: true },
+    method: { type: 'enum', options: ['Overboeking', 'Automatische incasso', 'iDEAL', 'Contant', 'Overig'] },
+    reference: { type: 'string', max: 140 },
+    invoiceId: { type: 'number', min: 0 },
+    tenant: { type: 'string', max: 120 },
+    tenantId: { type: 'number', min: 0 },
+    property: { type: 'string', max: 160 },
+    propertyId: { type: 'number', min: 0 },
+    note: { type: 'string', max: 500 },
   },
   wws: {
     label: { type: 'string', required: true, max: 160 },
@@ -106,7 +130,8 @@ const defaults: Partial<Record<RecordKind, Record<string, unknown>>> = {
   contracts: { status: 'Concept' },
   maintenance: { status: 'Open', priority: 'Gemiddeld' },
   documents: { category: 'Overig' },
-  payments: { status: 'Openstaand', type: 'Huur' },
+  invoices: { status: 'Open', type: 'Huur' },
+  payments: { method: 'Overboeking' },
 }
 
 export const isKind = (value: string): value is RecordKind => value in schemas
@@ -144,9 +169,13 @@ export function validate(kind: RecordKind, body: unknown, partial = false): { da
       data[key] = raw.trim().slice(0, spec.max ?? 200)
     }
   }
-  if (kind === 'contracts' && data.start && data.end && String(data.end) < String(data.start)) return { error: 'De einddatum ligt vóór de startdatum.' }
+  if (kind === 'contracts' && data.start && data.end && String(data.end) <= String(data.start)) return { error: 'De einddatum moet na de startdatum liggen.' }
+  if (kind === 'contracts' && !partial && data.term === 'Bepaalde tijd' && !data.end) return { error: 'Vul een einddatum in voor een contract voor bepaalde tijd.' }
+  if (kind === 'contracts' && data.status === 'Beëindigd' && !data.terminatedOn && !partial) data.terminatedOn = new Date().toISOString().slice(0, 10)
   if (!partial) for (const [key, value] of Object.entries(defaults[kind] ?? {})) if (data[key] === undefined) data[key] = value
-  if (kind === 'payments' && data.status === 'Betaald' && !data.paidDate) data.paidDate = new Date().toISOString().slice(0, 10)
+  if (kind === 'payments' && data.amount !== undefined && data.amount !== null && Number(data.amount) <= 0) return { error: 'Het bedrag van een betaling moet groter zijn dan 0.' }
+  if (kind === 'invoices' && data.issueDate && data.dueDate && String(data.dueDate) < String(data.issueDate)) return { error: 'De vervaldatum ligt vóór de factuurdatum.' }
+  if (kind === 'invoices' && data.period !== undefined && data.period !== null && !/^\d{4}-\d{2}$/.test(String(data.period))) return { error: 'Ongeldige periode.' }
   return { data }
 }
 
@@ -180,9 +209,80 @@ export function getRecord(userId: number, kind: RecordKind, id: number, withFile
   }
 }
 
+function invoiceNumbers(database: SqliteDatabase, userId: number, exceptId?: number) {
+  return database.prepare("SELECT id, data_json FROM records WHERE user_id = ? AND kind = 'invoices'").all(userId)
+    .filter(row => Number(row.id) !== exceptId)
+    .map(row => String((JSON.parse(String(row.data_json)) as { number?: string }).number ?? ''))
+}
+
+/** Factuurnummers zijn uniek per gebruiker. Geeft een foutmelding of null. */
+export function invoiceNumberError(userId: number, number: unknown, exceptId?: number) {
+  if (typeof number !== 'string' || !number.trim()) return null
+  const database = openDatabase()
+  try {
+    return invoiceNumbers(database, userId, exceptId).includes(number.trim()) ? `Factuurnummer ${number} bestaat al.` : null
+  } finally {
+    database.close()
+  }
+}
+
+/** Voert de migratie uit zonder dat een fout het laden van de app blokkeert. */
+export function migrateLegacyPaymentsSafely(userId: number) {
+  try {
+    migrateLegacyPayments(userId)
+  } catch (error) {
+    console.error('Migratie van oude betalingen mislukt; gegevens zijn ongewijzigd gebleven.', error)
+  }
+}
+
+/**
+ * Eenmalige migratie: betalingen uit het oude model (vordering met vervaldatum en status) worden
+ * omgezet naar een factuur plus, als ze betaald waren, een ontvangen betaling. Idempotent en per
+ * gebruiker in één transactie: lukt het niet, dan blijft alles zoals het was.
+ */
+export function migrateLegacyPayments(userId: number) {
+  const database = openDatabase()
+  try {
+    const legacy = database.prepare("SELECT * FROM records WHERE user_id = ? AND kind = 'payments'").all(userId)
+      .flatMap(row => {
+        try {
+          const data = JSON.parse(String(row.data_json)) as Record<string, unknown>
+          return 'dueDate' in data && !('receivedOn' in data) ? [{ row, data }] : []
+        } catch {
+          return [] // Onleesbaar record: overslaan, niet de hele migratie laten mislukken.
+        }
+      })
+    if (!legacy.length) return 0
+    database.exec('BEGIN')
+    try {
+      const numbers = invoiceNumbers(database, userId)
+      const insert = database.prepare('INSERT INTO records (user_id, kind, data_json, created_at) VALUES (?, ?, ?, ?)')
+      for (const { row, data } of legacy) {
+        const { invoice, payment } = convertLegacyPayment(data)
+        const number = nextInvoiceNumber(numbers, Number(String(invoice.issueDate).slice(0, 4)) || new Date().getFullYear())
+        numbers.push(number)
+        const created = insert.run(userId, 'invoices', JSON.stringify({ ...invoice, number, migratedFrom: Number(row.id) }), String(row.created_at))
+        if (payment) insert.run(userId, 'payments', JSON.stringify({ ...payment, invoiceId: Number(created.lastInsertRowid) }), String(row.created_at))
+        database.prepare('DELETE FROM records WHERE id = ?').run(Number(row.id))
+      }
+      database.exec('COMMIT')
+    } catch (error) {
+      database.exec('ROLLBACK')
+      throw error
+    }
+    return legacy.length
+  } finally {
+    database.close()
+  }
+}
+
 export function createRecord(userId: number, kind: RecordKind, data: Record<string, unknown>) {
   const database = openDatabase()
   try {
+    if (kind === 'invoices' && !data.number) {
+      const year = Number(String(data.issueDate ?? '').slice(0, 4)) || new Date().getFullYear()
+      data = { ...data, number: nextInvoiceNumber(invoiceNumbers(database, userId), year) }
+    }
     const result = database.prepare('INSERT INTO records (user_id, kind, data_json, created_at) VALUES (?, ?, ?, ?)').run(userId, kind, JSON.stringify(data), new Date().toISOString())
     const row = database.prepare('SELECT * FROM records WHERE id = ?').get(Number(result.lastInsertRowid)) as Record<string, unknown>
     return map(row, false)

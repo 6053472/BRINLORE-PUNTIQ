@@ -5,7 +5,9 @@ import { useApp } from './AppProvider'
 import { Icon } from './icons'
 import { Dashboard } from './Dashboard'
 import { PropertiesModule, PropertyDetail, PropertyModal } from './Properties'
-import { ContractsModule, DocumentsModule, MaintenanceModule, TenantsModule } from './Resources'
+import { DocumentsModule, MaintenanceModule, TenantsModule } from './Resources'
+import { ContractsModule } from './Contracts'
+import { ReportsModule } from './Reports'
 import { FinanceModule } from './Finance'
 import { WwsModal, WwsModule } from './Wws'
 import { WwsoModal, WwsoModule } from './Wwso'
@@ -23,7 +25,8 @@ const navItems: { id: ModuleId; icon: string; label: string }[] = [
   { id: 'contracts', icon: 'file', label: 'Contracten' },
   { id: 'maintenance', icon: 'wrench', label: 'Onderhoud' },
   { id: 'documents', icon: 'folder', label: 'Documenten' },
-  { id: 'finance', icon: 'euro', label: 'Financieel' },
+  { id: 'finance', icon: 'euro', label: 'Betalingen' },
+  { id: 'reports', icon: 'download', label: 'Rapportages' },
 ]
 const adminItems: { id: ModuleId; icon: string; label: string }[] = [
   { id: 'admin', icon: 'shield', label: 'Beheeroverzicht' },
@@ -50,6 +53,10 @@ export function Shell() {
   const displayName = fullName || draftUsername?.trim() || user.username
   const [active, setActive] = useState<ModuleId>('dashboard')
   const [section, setSection] = useState<SettingsSection>('profile')
+  const [focusContract, setFocusContract] = useState<number | null>(null)
+  const clearFocusContract = useCallback(() => setFocusContract(null), [])
+  const [focusInvoice, setFocusInvoice] = useState<number | null>(null)
+  const clearFocusInvoice = useCallback(() => setFocusInvoice(null), [])
   const [menuOpen, setMenuOpen] = useState(false)
   const [popover, setPopover] = useState<'profile' | 'notifications' | 'search' | null>(null)
   const [query, setQuery] = useState('')
@@ -72,6 +79,13 @@ export function Shell() {
     if (window.location.hash !== hash) window.history.pushState(null, '', hash)
     window.scrollTo({ top: 0 })
   }, [])
+
+  // Naar een module, en optioneel direct een record openen (bijv. een contract vanuit een melding).
+  const openTarget = useCallback((id: ModuleId, recordId?: number) => {
+    if (id === 'contracts' && recordId) setFocusContract(recordId)
+    if (id === 'finance' && recordId) setFocusInvoice(recordId)
+    go(id)
+  }, [go])
 
   // Navigatie via URL-hash: verversen en de terugknop werken zoals verwacht.
   useEffect(() => {
@@ -116,7 +130,7 @@ export function Shell() {
   }, [])
 
   const notifications = useMemo(
-    () => buildNotifications({ contracts: records.contracts, maintenance: records.maintenance, payments: records.payments, properties, settings: user.settings }),
+    () => buildNotifications({ contracts: records.contracts, maintenance: records.maintenance, invoices: records.invoices, payments: records.payments, properties, settings: user.settings }),
     [records, properties, user.settings],
   )
   const unread = notifications.filter(item => !readIdsState.includes(item.id))
@@ -137,7 +151,7 @@ export function Shell() {
     return [
       ...properties.filter(p => hit(p.name, p.address)).map(p => ({ key: `p${p.id}`, label: p.name, sub: p.address, group: 'Vastgoed', module: 'properties' as ModuleId, property: p })),
       ...records.tenants.filter(t => hit(t.name, t.email, t.property)).map(t => ({ key: `t${t.id}`, label: t.name, sub: t.property ?? t.email ?? '', group: 'Huurders', module: 'tenants' as ModuleId, property: undefined })),
-      ...records.contracts.filter(c => hit(c.tenant, c.property)).map(c => ({ key: `c${c.id}`, label: `${c.property} — ${c.tenant}`, sub: 'Contract', group: 'Contracten', module: 'contracts' as ModuleId, property: undefined })),
+      ...records.contracts.filter(c => hit(c.tenant, c.property)).map(c => ({ key: `c${c.id}`, label: `${c.property} — ${c.tenant}`, sub: 'Contract', group: 'Contracten', module: 'contracts' as ModuleId, property: undefined, recordId: c.id })),
       ...records.maintenance.filter(m => hit(m.title, m.property)).map(m => ({ key: `m${m.id}`, label: m.title, sub: m.property, group: 'Onderhoud', module: 'maintenance' as ModuleId, property: undefined })),
       ...records.documents.filter(d => hit(d.name, d.property)).map(d => ({ key: `d${d.id}`, label: d.name, sub: d.category, group: 'Documenten', module: 'documents' as ModuleId, property: undefined })),
     ].slice(0, 12)
@@ -207,7 +221,7 @@ export function Shell() {
             {popover === 'search' && query.trim().length >= 2 && (
               <div className="popover search-results">
                 {results.length === 0 ? <p className="muted pad">Geen resultaten voor “{query}”.</p> : results.map(result => (
-                  <button key={result.key} type="button" onClick={() => { if (result.property) { go('properties'); select(result.property) } else go(result.module) }}>
+                  <button key={result.key} type="button" onClick={() => { if (result.property) { go('properties'); select(result.property) } else openTarget(result.module, 'recordId' in result ? (result.recordId as number) : undefined) }}>
                     <span><strong>{result.label}</strong><small>{result.sub}</small></span><em>{result.group}</em>
                   </button>
                 ))}
@@ -223,7 +237,7 @@ export function Shell() {
                 <div className="popover notifications">
                   <div className="popover-head"><strong>Meldingen</strong>{unread.length > 0 && <button type="button" className="link-button" onClick={markAllRead}>Alles gelezen</button>}</div>
                   {notifications.length === 0 ? <p className="muted pad">Geen meldingen. U bent helemaal bij.</p> : notifications.slice(0, 8).map(item => (
-                    <button type="button" key={item.id} className={readIdsState.includes(item.id) ? 'read' : ''} onClick={() => go(item.module)}>
+                    <button type="button" key={item.id} className={readIdsState.includes(item.id) ? 'read' : ''} onClick={() => openTarget(item.module, item.recordId)}>
                       <span className={`dot ${item.tone}`} />
                       <span><strong>{item.title}</strong><small>{item.detail}</small></span>
                       <time>{item.when}</time>
@@ -253,15 +267,16 @@ export function Shell() {
 
         {site?.announcement && <div className={`announcement ${site.announcementTone}`} role="status"><Icon name={site.announcementTone === 'warning' ? 'alert' : 'bell'} size={16} /> {site.announcement}</div>}
         <main id="main" className="page-body">
-          {active === 'dashboard' && <Dashboard onNavigate={go} onAdd={() => setModal({ type: 'property' })} onWws={() => setModal({ type: 'wws' })} onSelect={select} />}
+          {active === 'dashboard' && <Dashboard onNavigate={openTarget} onAdd={() => setModal({ type: 'property' })} onWws={() => setModal({ type: 'wws' })} onSelect={select} />}
           {active === 'properties' && <PropertiesModule onSelect={select} onAdd={() => setModal({ type: 'property' })} />}
           {active === 'wws' && <WwsModule onCalculate={() => setModal({ type: 'wws' })} onOpen={record => setModal({ type: 'wws', record })} />}
           {active === 'wwso' && <WwsoModule onCalculate={() => setModal({ type: 'wwso' })} onOpen={record => setModal({ type: 'wwso', record })} />}
           {active === 'tenants' && <TenantsModule />}
-          {active === 'contracts' && <ContractsModule />}
+          {active === 'contracts' && <ContractsModule focusId={focusContract} onFocusHandled={clearFocusContract} />}
           {active === 'maintenance' && <MaintenanceModule />}
           {active === 'documents' && <DocumentsModule />}
-          {active === 'finance' && <FinanceModule />}
+          {active === 'finance' && <FinanceModule focusInvoiceId={focusInvoice} onFocusHandled={clearFocusInvoice} />}
+          {active === 'reports' && <ReportsModule />}
           {active === 'settings' && <SettingsPanel section={section} onSection={next => go('settings', next)} />}
           {isAdmin && active === 'admin' && <AdminOverview onNavigate={go} />}
           {isAdmin && active === 'users' && <UsersAdmin />}

@@ -4,9 +4,8 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
 import { EmptyState, Modal, PageHead, Status } from './ui'
-import { contractState } from '../lib/notifications'
 import { downloadCsv, formatBytes, formatDate, money, readFileAsDataUrl, today } from '../lib/format'
-import type { Contract, DocumentItem, Maintenance, RecordKind, Tenant } from '../lib/types'
+import type { DocumentItem, Maintenance, RecordKind, Tenant } from '../lib/types'
 
 export type Field = {
   name: string
@@ -231,8 +230,6 @@ export function ResourceModule<T extends { id: number }>({ kind, eyebrow, title,
   )
 }
 
-const stateOptions = ['Concept', 'Actief', 'Verloopt binnenkort', 'Verlopen', 'Beëindigd']
-
 export function TenantsModule() {
   const { records, properties } = useApp()
   const propertyNames = properties.map(property => property.name)
@@ -262,45 +259,6 @@ export function TenantsModule() {
         { name: 'phone', label: 'Telefoonnummer', type: 'tel', placeholder: '06 1234 5678' },
         { name: 'property', label: 'Object', list: propertyNames, placeholder: 'bijv. Prinsengracht 482', wide: true },
         { name: 'notes', label: 'Notities', type: 'textarea', placeholder: 'Bijzonderheden, afspraken…' },
-      ]}
-    />
-  )
-}
-
-export function ContractsModule() {
-  const { records, properties, user } = useApp()
-  const days = user.settings.contractReminderDays
-  const withState = (row: Contract) => contractState(row, days)
-  return (
-    <ResourceModule<Contract>
-      kind="contracts"
-      eyebrow="CONTRACTEN"
-      title="Contracten"
-      description="Beheer huurcontracten, looptijden en verlengingen."
-      addLabel="Nieuw contract"
-      emptyText="Leg uw huurcontracten vast en ontvang tijdig een melding voor afloop en indexatie."
-      rows={records.contracts}
-      filter={{ label: 'Status', options: stateOptions, value: withState }}
-      searchText={row => `${row.property} ${row.tenant} ${withState(row)}`}
-      csv={{ filename: 'contracten.csv', header: ['Object', 'Huurder', 'Start', 'Einde', 'Huur', 'Borg', 'Status'], row: row => [row.property, row.tenant, row.start, row.end, row.rent, row.deposit, withState(row)] }}
-      columns={[
-        { label: 'Object', sort: row => row.property.toLowerCase(), render: row => <strong>{row.property}</strong> },
-        { label: 'Huurder', sort: row => row.tenant.toLowerCase(), render: row => row.tenant },
-        { label: 'Start', sort: row => row.start, render: row => formatDate(row.start) },
-        { label: 'Einddatum', sort: row => row.end, render: row => formatDate(row.end) },
-        { label: 'Huur / maand', align: 'right', sort: row => row.rent ?? 0, render: row => <strong>{row.rent ? money(row.rent) : '—'}</strong> },
-        { label: 'Status', sort: withState, render: row => <Status value={withState(row)} /> },
-      ]}
-      defaults={{ start: today(), status: 'Actief' }}
-      fields={[
-        { name: 'property', label: 'Object', required: true, list: properties.map(property => property.name), placeholder: 'bijv. Prinsengracht 482' },
-        { name: 'tenant', label: 'Huurder', required: true, list: records.tenants.map(tenant => tenant.name) },
-        { name: 'start', label: 'Startdatum', type: 'date', required: true },
-        { name: 'end', label: 'Einddatum', type: 'date', required: true },
-        { name: 'rent', label: 'Huurprijs per maand (€)', type: 'number', step: '0.01' },
-        { name: 'deposit', label: 'Waarborgsom (€)', type: 'number', step: '0.01' },
-        { name: 'status', label: 'Status', type: 'select', options: ['Concept', 'Actief', 'Beëindigd'], wide: true },
-        { name: 'notes', label: 'Notities', type: 'textarea' },
       ]}
     />
   )

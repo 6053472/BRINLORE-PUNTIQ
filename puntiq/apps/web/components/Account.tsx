@@ -401,7 +401,7 @@ function NotificationsSection() {
   const s = user.settings
   const set = useSettingSaver()
   const active = useMemo(
-    () => buildNotifications({ contracts: records.contracts, maintenance: records.maintenance, payments: records.payments, properties, settings: s }).length,
+    () => buildNotifications({ contracts: records.contracts, maintenance: records.maintenance, invoices: records.invoices, payments: records.payments, properties, settings: s }).length,
     [records, properties, s],
   )
   const anyOn = s.notifyContracts || s.notifyIndexation || s.notifyMaintenance || s.notifyPayments

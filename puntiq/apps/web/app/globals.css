@@ -612,3 +612,117 @@ input[aria-invalid='true']:focus { border-color: var(--danger); box-shadow: 0 0 
 .room-row .cell:first-child { justify-content: stretch; }
 .room-row .cell > input:not([type='checkbox']), .room-row .cell > select { width: 100%; margin: 0; min-height: 38px; padding: 7px 10px; }
 .room-row .cell > select { padding-right: 28px; background-position: right 9px center; }
+
+/* ---------- Contracten ---------- */
+.form-note { align-self: end; padding-bottom: 12px; }
+.clickable-rows tbody tr { cursor: pointer; }
+.clickable-rows tbody tr:hover { background: var(--surface-2); }
+.table-sub { display: block; color: var(--warn-fg); font-size: 12px; }
+.expiring-panel { margin-bottom: 24px; }
+.expiring-panel ul { list-style: none; margin: 0; padding: 0 var(--pad) 12px; }
+.expiring-panel li button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 12px 0; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; color: var(--ink); cursor: pointer; }
+.expiring-panel li button:hover strong { text-decoration: underline; }
+.expiring-panel li span:nth-child(2) { display: grid; min-width: 0; }
+.expiring-panel li small { color: var(--muted); }
+.expiring-panel em { font-style: normal; font-weight: 700; font-size: 13px; }
+.expiring-panel time { color: var(--muted); font-size: 13px; min-width: 90px; text-align: right; }
+.contract-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 24px; align-items: start; }
+.contract-main { display: grid; gap: 18px; min-width: 0; }
+.contract-status-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.contract-rent { font: 400 26px var(--serif); }
+.contract-rent small { font: 13px var(--sans); color: var(--muted); }
+.contract-progress > div { height: 8px; background: var(--line); }
+.contract-progress > div span { display: block; height: 100%; background: var(--sage); }
+.contract-progress > div span.warn { background: var(--gold); }
+.contract-progress small { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.contract-action { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; padding: 14px; background: var(--surface-2); border-left: 3px solid var(--gold); }
+.contract-action label { flex: 1; min-width: 180px; }
+.contract-links { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.contract-links section, .contract-notes { border: 1px solid var(--line); padding: 14px 16px; }
+.contract-links h3, .contract-notes h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font: 700 12px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.contract-links p, .contract-notes p { margin: 0; font-size: 14px; white-space: pre-line; }
+.contract-links em { font-size: 12px; }
+.contract-docs { display: grid; gap: 12px; border: 1px solid var(--line); padding: 4px 16px 16px; }
+.contract-docs .panel-heading { padding: 12px 0 0; }
+.contract-docs ul { list-style: none; margin: 0; padding: 0; }
+.contract-docs li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.contract-docs li.active strong { color: var(--gold); }
+.contract-docs li span { display: grid; min-width: 0; }
+.contract-docs li strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contract-docs li small { color: var(--muted); }
+.contract-docs .button.disabled { opacity: 0.6; pointer-events: none; }
+.contract-preview { border: 1px solid var(--line); background: var(--surface-2); }
+.contract-preview iframe { display: block; width: 100%; height: 420px; border: 0; }
+.contract-preview img { display: block; width: 100%; height: auto; }
+@media (max-width: 900px) {
+  .contract-detail, .contract-links { grid-template-columns: 1fr; }
+  .expiring-panel li button { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .expiring-panel time { display: none; }
+}
+
+/* ---------- Betalingen ---------- */
+.finance-filters { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; padding: 16px var(--pad); margin-bottom: 24px; }
+.finance-filters label { min-width: 170px; flex: 0 1 220px; font-size: 12px; }
+.finance-filters select, .finance-filters input { margin-top: 4px; }
+.finance-filters .link-button { margin-bottom: 12px; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); margin-bottom: 24px; overflow-x: auto; }
+.tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: none; border: 0; border-bottom: 3px solid transparent; font-size: 14px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.tabs button:hover { color: var(--ink); }
+.tabs button.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--gold); }
+.tabs .nav-count { margin-left: 0; }
+.bar.invoiced, .dot.invoiced-dot { background: transparent; border: 2px solid var(--navy); }
+:root[data-theme='dark'] .bar.invoiced, :root[data-theme='dark'] .dot.invoiced-dot { border-color: var(--sand); }
+.aging { list-style: none; margin: 0; padding: 4px var(--pad) var(--pad); display: grid; gap: 14px; }
+.aging li { display: grid; grid-template-columns: 130px 1fr auto 32px; gap: 12px; align-items: center; font-size: 13px; }
+.aging li > div { height: 10px; background: var(--line); }
+.aging li i { display: block; height: 100%; background: var(--gold); }
+.aging li i.bad { background: var(--danger); }
+.aging small { color: var(--muted); text-align: right; }
+.overdue-days { color: var(--bad-fg); }
+.invoice-payments { margin: 0; }
+.invoice-payments table { margin: 0 0 8px; }
+.status.link-status { border: 0; cursor: pointer; font-family: inherit; }
+.status.link-status:hover { text-decoration: underline; }
+@media (max-width: 1100px) { .grid-main { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .finance-filters label { flex: 1 1 100%; } .aging li { grid-template-columns: 100px 1fr auto; } .aging small { display: none; } }
+.bars:has(.invoiced) .bar { width: 28%; }
+
+/* ---------- Rapportages ---------- */
+.reports-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; align-items: start; }
+.report-types { display: grid; gap: 8px; position: sticky; top: 92px; }
+.report-types button { display: flex; gap: 12px; align-items: flex-start; text-align: left; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid transparent; cursor: pointer; color: var(--ink); }
+.report-types button:hover { background: var(--surface-2); }
+.report-types button.active { border-left-color: var(--gold); background: var(--surface-2); }
+.report-types strong { display: block; font-size: 14px; }
+.report-types small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.report-types .card-icon { width: 34px; height: 34px; }
+.report-options { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; padding: 16px var(--pad); margin: 0; }
+.report-options label { flex: 0 1 200px; font-size: 12px; }
+.report-options select, .report-options input { margin-top: 4px; }
+.report-note { flex: 0 1 200px; padding-bottom: 12px; }
+.report-actions { margin-left: auto; display: flex; gap: 10px; }
+.report-preview { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.report-preview > header { background: var(--navy); color: #fff; padding: 22px 28px; border-bottom: 3px solid var(--gold); }
+.report-preview > header small { color: var(--gold); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; }
+.report-preview > header h2 { margin: 4px 0; font: 400 26px var(--serif); color: #fff; }
+.report-preview > header p { margin: 0; font-size: 13px; color: rgba(255, 255, 255, 0.75); }
+.report-preview section { padding: 20px 28px 4px; }
+.report-preview h3 { margin: 0 0 12px; font: 400 19px var(--serif); padding-bottom: 6px; border-bottom: 2px solid var(--gold); display: inline-block; }
+.report-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.report-kpis div { background: var(--surface-2); border-left: 3px solid var(--gold); padding: 10px 12px; }
+.report-kpis span { display: block; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.report-kpis strong { font-size: 17px; }
+.report-table { font-size: 12.5px; margin-bottom: 12px; }
+.report-table th { background: var(--navy); color: #fff; font-size: 11px; }
+.report-table tfoot td { background: var(--surface-2); font-weight: 700; }
+.report-disclaimer { margin: 8px 28px 24px; padding: 12px 14px; font-size: 12px; font-style: italic; color: var(--muted); border-left: 3px solid var(--gold); background: var(--surface-2); }
+@media (max-width: 1100px) {
+  .reports-layout { grid-template-columns: 1fr; }
+  .report-types { position: static; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
+@media (max-width: 600px) {
+  .report-options label { flex: 1 1 100%; }
+  .report-actions { margin-left: 0; width: 100%; }
+  .report-actions .button { flex: 1; }
+  .report-preview section, .report-preview > header { padding-left: 16px; padding-right: 16px; }
+}

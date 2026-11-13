@@ -10,9 +10,12 @@
     "test": "tsx --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
+    "jspdf": "4.2.1",
+    "jspdf-autotable": "5.0.9",
     "next": "16.4.5",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "write-excel-file": "4.1.1"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

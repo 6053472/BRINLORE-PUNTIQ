@@ -4,44 +4,50 @@ import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
 import { EmptyState, Modal, PageHead, Status } from './ui'
-import { berekenWWS, type Energielabel } from '../lib/wws'
-import { downloadCsv, money, resizeImage } from '../lib/format'
+import { berekenWws, energielabels, kiesRegelset, legeInvoer, nieuweRuimte, type Betrouwbaarheid, type Energielabel, type WwsInvoer } from '../lib/wws'
+import { BetrouwbaarheidBadge } from './Wws'
+import { downloadCsv, money, resizeImage, today } from '../lib/format'
 import type { Property } from '../lib/types'
 
 export const propertyImages = (property: Property) => (property.images?.length ? property.images : property.image ? [property.image] : [])
 export const propertyStatuses = ['Beschikbaar', 'Verhuurd', 'In onderhoud']
 
-/** Indicatieve WWS-schatting op basis van de gegevens in het woningformulier. */
-function estimate(data: FormData) {
+type Estimate = { points: number; rent: number; price: number; reliability: Betrouwbaarheid | null; missing: string[] }
+const emptyEstimate: Estimate = { points: 0, rent: 0, price: 0, reliability: null, missing: [] }
+
+/** Snelle WWS-schatting met dezelfde rekenmotor en regelset als de WWS-module. */
+function estimate(data: FormData): Estimate {
   const area = Number(data.get('area')) || 0
   const type = String(data.get('type'))
-  if (!area || type === 'Bedrijfsruimte') return { points: 0, rent: 0, price: 0 }
-  const kitchen = Number(data.get('kitchenPoints')) || 0
-  const result = berekenWWS({
-    m2Vertrekken: area,
-    m2OverigeRuimten: 0,
-    verwarmdeVertrekken: Number(data.get('heatingRooms')) || 0,
-    verwarmdeOverigeRuimten: Number(data.get('heatingOtherRooms')) || 0,
-    gekoeldeVertrekken: 0,
-    energielabel: (String(data.get('energyLabel') || '') || 'GEEN') as Energielabel,
-    bouwjaar: Number(data.get('yearBuilt')) || 0,
-    woningType: 'meergezins',
-    aanrechtLengteMeters: kitchen >= 7 ? 2 : kitchen >= 4 ? 1 : 0,
-    keukenExtraPunten: 0,
-    sanitairPunten: Number(data.get('bathroomPoints')) || 0,
-    m2BuitenruimtePrive: Number(data.get('outdoorArea')) || 0,
-    wozWaarde: Number(data.get('woz')) || 0,
-    isCoropAmsterdamUtrechtKlein: false,
-    opslagType: 'geen',
-  })
-  const rent = result.wettelijkeMaximumhuur ?? result.huurprijsMetOpslag
-  return { points: result.totaalPunten, rent, price: Math.round((rent * 12) / 0.045 / 1000) * 1000 }
+  const regelset = kiesRegelset(today())
+  if (!area || type === 'Bedrijfsruimte' || !regelset) return emptyEstimate
+  const heated = Math.max(0, Number(data.get('heatingRooms')) || 0)
+  const heatedOther = Math.max(0, Number(data.get('heatingOtherRooms')) || 0)
+  const label = String(data.get('energyLabel') || '')
+  const sanitair = String(data.get('bathroomPoints') ?? '')
+  const invoer: WwsInvoer = {
+    ...legeInvoer(today()),
+    bouwjaar: Number(data.get('yearBuilt')) || null,
+    // Eén vertrek draagt de oppervlakte; de overige tellen alleen mee voor verwarming.
+    vertrekken: Array.from({ length: Math.max(1, heated) }, (_, index) => nieuweRuimte(`Vertrek ${index + 1}`, index === 0 ? area : 0, index < heated)),
+    overigeRuimten: Array.from({ length: heatedOther }, (_, index) => nieuweRuimte(`Overige ruimte ${index + 1}`, 0, true)),
+    energielabel: (energielabels as string[]).includes(label) ? (label as Energielabel) : null,
+    keuken: { aanrechtLengteMeters: Number(data.get('counterLength')) || 0, voorzieningen: {}, extraPuntenHandmatig: 0 },
+    buitenruimte: { priveM2: Number(data.get('outdoorArea')) || 0 },
+    woz: { waarde: Number(data.get('woz')) || null, regioKenmerken: [] },
+    handmatig: sanitair === '' ? {} : { sanitair: { punten: Number(sanitair) || 0, toelichting: 'Woningformulier' } },
+  }
+  const result = berekenWws(invoer, regelset)
+  const missing = result.rubrieken.filter(item => item.punten === null).map(item => item.naam.toLowerCase())
+  if (result.totaalPunten === null) return { ...emptyEstimate, reliability: result.betrouwbaarheid, missing }
+  const rent = result.maximaleHuur ?? result.tabelHuur ?? 0
+  return { points: result.totaalPunten, rent, price: Math.round((rent * 12) / 0.045 / 1000) * 1000, reliability: result.betrouwbaarheid, missing }
 }
 
 export function PropertyModal({ property, onClose }: { property?: Property; onClose: () => void }) {
   const { saveProperty, notify } = useApp()
   const [images, setImages] = useState<string[]>(propertyImages(property ?? ({} as Property)))
-  const [suggestion, setSuggestion] = useState({ points: 0, rent: 0, price: 0 })
+  const [suggestion, setSuggestion] = useState<Estimate>(emptyEstimate)
   const [rent, setRent] = useState(property?.rent ? String(property.rent) : '')
   const [price, setPrice] = useState(property?.price ? String(property.price) : '')
   const [points, setPoints] = useState(property?.points ? String(property.points) : '')
@@ -143,7 +149,7 @@ function PropertyFields({ property, onChange, rent, price, setRent, setPrice, se
   setRent: (value: string) => void
   setPrice: (value: string) => void
   setPoints: (value: string) => void
-  suggestion: { points: number; rent: number; price: number }
+  suggestion: Estimate
 }) {
   return (
     <fieldset className="plain" onChange={event => onChange((event.currentTarget as HTMLElement).closest('form'))}>
@@ -178,21 +184,17 @@ function PropertyFields({ property, onChange, rent, price, setRent, setPrice, se
           <label>Privé-buitenruimte (m²)<input name="outdoorArea" type="number" min="0" placeholder="bijv. 8" /></label>
           <label>Verwarmde vertrekken<input name="heatingRooms" type="number" min="0" placeholder="bijv. 3" /></label>
           <label>Verwarmde overige ruimtes<input name="heatingOtherRooms" type="number" min="0" max="4" placeholder="bijv. 1" /></label>
-          <label>Keuken
-            <select name="kitchenPoints" defaultValue="4"><option value="0">Geen volledige keuken · 0 punten</option><option value="4">1–2 meter · 4 punten</option><option value="7">Langer dan 2 meter · 7 punten</option></select>
-          </label>
-          <label>Sanitair
-            <select name="bathroomPoints" defaultValue="7"><option value="0">Geen douche/bad · 0 punten</option><option value="4">Douche · 4 punten</option><option value="7">Bad of douche + bad · 7 punten</option></select>
-          </label>
+          <label>Aanrechtlengte keuken (m)<input name="counterLength" type="number" min="0" step="0.1" placeholder="bijv. 2,4" /></label>
+          <label>Sanitair (punten)<input name="bathroomPoints" type="number" min="0" step="0.25" placeholder="zelf vastgesteld" /></label>
         </div>
         <div className="calc-result">
           {suggestion.points ? (
             <>
-              <span><b>{suggestion.points}</b> punten · max. huur <b>{money(suggestion.rent)}</b> · indicatieve waarde <b>{money(suggestion.price)}</b> (4,5% bruto)</span>
+              <span>{suggestion.reliability && <BetrouwbaarheidBadge value={suggestion.reliability} />} <b>{suggestion.points}</b> punten · max. huur <b>{money(suggestion.rent)}</b> · indicatieve waarde <b>{money(suggestion.price)}</b> (4,5% bruto)</span>
               <button type="button" className="button small" onClick={() => { setRent(String(suggestion.rent)); setPrice(String(suggestion.price)); setPoints(String(suggestion.points)) }}>Overnemen</button>
             </>
           ) : (
-            <span className="muted">Prijspeil 1 januari 2026. Vul oppervlakte en WWS-gegevens in voor een schatting.</span>
+            <span className="muted">{suggestion.missing.length ? `Nog nodig voor een schatting: ${suggestion.missing.join(', ')}.` : 'Vul oppervlakte en WWS-gegevens in voor een schatting.'} Gebruik de WWS-module voor een berekening per ruimte.</span>
           )}
         </div>
       </div>

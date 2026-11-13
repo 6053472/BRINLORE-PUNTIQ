@@ -25,7 +25,7 @@ type AppContextValue = {
   logout: (everywhere?: boolean) => Promise<void>
 }
 
-const emptyRecords: RecordMap = { tenants: [], contracts: [], maintenance: [], documents: [], payments: [], wws: [] }
+const emptyRecords: RecordMap = { tenants: [], contracts: [], maintenance: [], documents: [], payments: [], wws: [], wwso: [] }
 const AppContext = createContext<AppContextValue | null>(null)
 
 export function useApp() {

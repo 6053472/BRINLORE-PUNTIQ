@@ -42,16 +42,16 @@ export function buildNotifications(source: Source): AppNotification[] {
     }
   }
 
-  if (settings.notifyContracts) {
+  if (settings.notifyContracts || settings.notifyIndexation) {
     for (const contract of source.contracts) {
       if (contract.status !== 'Actief') continue
       const left = daysBetween(now, contract.end)
-      if (left < 0) {
+      if (settings.notifyContracts && left < 0) {
         list.push({ id: `c${contract.id}-expired`, tone: 'urgent', title: 'Contract verlopen', detail: `${contract.property} — ${contract.tenant}`, when: formatDate(contract.end), module: 'contracts' })
-      } else if (left <= settings.contractReminderDays) {
+      } else if (settings.notifyContracts && left <= settings.contractReminderDays) {
         list.push({ id: `c${contract.id}-ending`, tone: 'warning', title: `Contract verloopt over ${left} ${left === 1 ? 'dag' : 'dagen'}`, detail: `${contract.property} — ${contract.tenant}`, when: formatDate(contract.end), module: 'contracts' })
       }
-      if (contract.rent) {
+      if (settings.notifyIndexation && contract.rent) {
         const anniversary = new Date(`${contract.start}T00:00:00`)
         const next = new Date(`${now}T00:00:00`)
         anniversary.setFullYear(next.getFullYear())
@@ -71,7 +71,7 @@ export function buildNotifications(source: Source): AppNotification[] {
       if (payment.status !== 'Openstaand') continue
       if (payment.dueDate < now) {
         list.push({ id: `p${payment.id}-late`, tone: 'urgent', title: `Betaling achterstallig: ${money(payment.amount)}`, detail: `${payment.description}${payment.tenant ? ` — ${payment.tenant}` : ''}`, when: formatDate(payment.dueDate), module: 'finance' })
-      } else if (payment.dueDate <= addDays(now, 7)) {
+      } else if (payment.dueDate <= addDays(now, settings.paymentReminderDays)) {
         list.push({ id: `p${payment.id}-soon`, tone: 'info', title: `Betaling binnenkort: ${money(payment.amount)}`, detail: payment.description, when: formatDate(payment.dueDate), module: 'finance' })
       }
     }

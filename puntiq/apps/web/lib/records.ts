@@ -25,7 +25,7 @@ export function openDatabase(): SqliteDatabase {
   return database
 }
 
-export type RecordKind = 'tenants' | 'contracts' | 'maintenance' | 'documents' | 'payments' | 'wws'
+export type RecordKind = 'tenants' | 'contracts' | 'maintenance' | 'documents' | 'payments' | 'wws' | 'wwso'
 type FieldSpec = { type: 'string' | 'number' | 'date' | 'enum' | 'file'; required?: boolean; options?: string[]; max?: number; min?: number }
 
 export const schemas: Record<RecordKind, Record<string, FieldSpec>> = {
@@ -83,6 +83,21 @@ export const schemas: Record<RecordKind, Record<string, FieldSpec>> = {
     points: { type: 'number', min: 0 },
     rent: { type: 'number', min: 0 },
     segment: { type: 'string', max: 200 },
+    regelset: { type: 'string', max: 80 },
+    betrouwbaarheid: { type: 'enum', options: ['officieel', 'indicatief', 'onvolledig'] },
+    /** Volledige invoer als JSON, zodat een berekening later opnieuw kan worden geopend. */
+    invoer: { type: 'string', max: 50000 },
+  },
+  // WWSO-berekeningen (onzelfstandige woonruimte) staan bewust los van WWS.
+  wwso: {
+    label: { type: 'string', required: true, max: 160 },
+    property: { type: 'string', max: 160 },
+    date: { type: 'date' },
+    points: { type: 'number' },
+    rent: { type: 'number', min: 0 },
+    regelset: { type: 'string', max: 80 },
+    betrouwbaarheid: { type: 'enum', options: ['officieel', 'indicatief', 'onvolledig'] },
+    invoer: { type: 'string', max: 50000 },
   },
 }
 

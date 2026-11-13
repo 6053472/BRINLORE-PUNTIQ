@@ -8,15 +8,17 @@ import { PropertiesModule, PropertyDetail, PropertyModal } from './Properties'
 import { ContractsModule, DocumentsModule, MaintenanceModule, TenantsModule } from './Resources'
 import { FinanceModule } from './Finance'
 import { WwsModal, WwsModule } from './Wws'
-import { ProfilePanel, SettingsPanel } from './Account'
+import { WwsoModal, WwsoModule } from './Wwso'
+import { SettingsPanel, isSettingsSection, type SettingsSection } from './Account'
 import { AdminOverview, AuditAdmin, SiteAdmin, UsersAdmin } from './Admin'
 import { buildNotifications } from '../lib/notifications'
-import type { ModuleId, Property } from '../lib/types'
+import type { ModuleId, Property, WwsCalculation, WwsoCalculation } from '../lib/types'
 
 const navItems: { id: ModuleId; icon: string; label: string }[] = [
   { id: 'dashboard', icon: 'home', label: 'Overzicht' },
   { id: 'properties', icon: 'building', label: 'Vastgoed' },
-  { id: 'wws', icon: 'calc', label: 'WWS / WWSO' },
+  { id: 'wws', icon: 'calc', label: 'WWS' },
+  { id: 'wwso', icon: 'users', label: 'WWSO (kamers)' },
   { id: 'tenants', icon: 'users', label: 'Huurders' },
   { id: 'contracts', icon: 'file', label: 'Contracten' },
   { id: 'maintenance', icon: 'wrench', label: 'Onderhoud' },
@@ -31,7 +33,7 @@ const adminItems: { id: ModuleId; icon: string; label: string }[] = [
 ]
 const allModules = [...navItems.map(item => item.id), 'profile', 'settings'] as ModuleId[]
 const adminModules = adminItems.map(item => item.id)
-const titles: Record<string, string> = { profile: 'Profiel', settings: 'Instellingen', ...Object.fromEntries(adminItems.map(item => [item.id, item.label])) }
+const titles: Record<string, string> = { settings: 'Instellingen', ...Object.fromEntries(adminItems.map(item => [item.id, item.label])) }
 const READ_KEY = 'puntiq-read-notifications'
 
 function readIds(): string[] {
@@ -47,28 +49,39 @@ export function Shell() {
   const fullName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ')
   const displayName = fullName || draftUsername?.trim() || user.username
   const [active, setActive] = useState<ModuleId>('dashboard')
+  const [section, setSection] = useState<SettingsSection>('profile')
   const [menuOpen, setMenuOpen] = useState(false)
   const [popover, setPopover] = useState<'profile' | 'notifications' | 'search' | null>(null)
   const [query, setQuery] = useState('')
   const [readIdsState, setReadIds] = useState<string[]>([])
-  const [modal, setModal] = useState<null | { type: 'property'; property?: Property } | { type: 'detail'; id: number } | { type: 'wws' }>(null)
+  const [modal, setModal] = useState<null | { type: 'property'; property?: Property } | { type: 'detail'; id: number } | { type: 'wws'; record?: WwsCalculation } | { type: 'wwso'; record?: WwsoCalculation }>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const isAdmin = user.role === 'admin'
   const [site, setSite] = useState<{ announcement: string; announcementTone: 'info' | 'warning' } | null>(null)
 
-  const go = useCallback((id: ModuleId) => {
-    setActive(id)
+  // 'profile' is een alias voor de profielsectie van Instellingen (oude links blijven werken).
+  const go = useCallback((id: ModuleId, sub?: SettingsSection) => {
+    const target = id === 'profile' ? 'settings' : id
+    const nextSection = id === 'profile' ? 'profile' : (sub ?? 'profile')
+    setActive(target)
+    if (target === 'settings') setSection(nextSection)
     setMenuOpen(false)
     setPopover(null)
     setQuery('')
-    if (window.location.hash !== `#${id}`) window.history.pushState(null, '', `#${id}`)
+    const hash = target === 'settings' ? `#settings/${nextSection}` : `#${target}`
+    if (window.location.hash !== hash) window.history.pushState(null, '', hash)
     window.scrollTo({ top: 0 })
   }, [])
 
   // Navigatie via URL-hash: verversen en de terugknop werken zoals verwacht.
   useEffect(() => {
     const fromHash = () => {
-      const hash = window.location.hash.slice(1) as ModuleId
+      const [hash, sub] = window.location.hash.slice(1).split('/') as [ModuleId, string | undefined]
+      if (hash === 'settings' || hash === 'profile') {
+        setActive('settings')
+        setSection(hash === 'profile' ? 'profile' : isSettingsSection(sub) ? sub : 'profile')
+        return
+      }
       setActive(allModules.includes(hash) || (isAdmin && adminModules.includes(hash)) ? hash : (user.settings.landingPage as ModuleId))
     }
     // Pas na de eerste render lezen (hash en localStorage bestaan niet op de server).
@@ -171,7 +184,7 @@ export function Shell() {
           </nav>
         )}
         <div className="sidebar-bottom">
-          <button type="button" className={`nav-item ${active === 'settings' ? 'active' : ''}`} onClick={() => go('settings')}><Icon name="settings" /> Instellingen</button>
+          <button type="button" className={`nav-item ${active === 'settings' ? 'active' : ''}`} aria-current={active === 'settings' ? 'page' : undefined} onClick={() => go('settings', section)}><Icon name="settings" /> Instellingen</button>
           <a className="nav-item" href="mailto:support@brinlore.com"><Icon name="help" /> Helpcentrum</a>
           <p className="sidebar-tagline">Ruimte voor vandaag.<br />Waarde voor morgen.</p>
         </div>
@@ -227,8 +240,10 @@ export function Shell() {
                     <span className="avatar-button static">{avatar}</span>
                     <div><strong>{displayName}</strong><small>{user.email}</small></div>
                   </div>
-                  <button type="button" onClick={() => go('profile')}><Icon name="user" size={16} /> Profiel</button>
-                  <button type="button" onClick={() => go('settings')}><Icon name="settings" size={16} /> Instellingen</button>
+                  <button type="button" onClick={() => go('settings', 'profile')}><Icon name="user" size={16} /> Profiel</button>
+                  <button type="button" onClick={() => go('settings', 'company')}><Icon name="building" size={16} /> Bedrijfsgegevens</button>
+                  <button type="button" onClick={() => go('settings', 'notifications')}><Icon name="bell" size={16} /> Meldingsinstellingen</button>
+                  <button type="button" onClick={() => go('settings', 'preferences')}><Icon name="settings" size={16} /> Voorkeuren</button>
                   <button type="button" className="menu-logout" onClick={() => logout()}><Icon name="logout" size={16} /> Uitloggen</button>
                 </div>
               )}
@@ -240,14 +255,14 @@ export function Shell() {
         <main id="main" className="page-body">
           {active === 'dashboard' && <Dashboard onNavigate={go} onAdd={() => setModal({ type: 'property' })} onWws={() => setModal({ type: 'wws' })} onSelect={select} />}
           {active === 'properties' && <PropertiesModule onSelect={select} onAdd={() => setModal({ type: 'property' })} />}
-          {active === 'wws' && <WwsModule onCalculate={() => setModal({ type: 'wws' })} />}
+          {active === 'wws' && <WwsModule onCalculate={() => setModal({ type: 'wws' })} onOpen={record => setModal({ type: 'wws', record })} />}
+          {active === 'wwso' && <WwsoModule onCalculate={() => setModal({ type: 'wwso' })} onOpen={record => setModal({ type: 'wwso', record })} />}
           {active === 'tenants' && <TenantsModule />}
           {active === 'contracts' && <ContractsModule />}
           {active === 'maintenance' && <MaintenanceModule />}
           {active === 'documents' && <DocumentsModule />}
           {active === 'finance' && <FinanceModule />}
-          {active === 'profile' && <ProfilePanel />}
-          {active === 'settings' && <SettingsPanel />}
+          {active === 'settings' && <SettingsPanel section={section} onSection={next => go('settings', next)} />}
           {isAdmin && active === 'admin' && <AdminOverview onNavigate={go} />}
           {isAdmin && active === 'users' && <UsersAdmin />}
           {isAdmin && active === 'audit' && <AuditAdmin />}
@@ -258,7 +273,8 @@ export function Shell() {
 
       {modal?.type === 'property' && <PropertyModal property={modal.property} onClose={() => setModal(null)} />}
       {modal?.type === 'detail' && detail && <PropertyDetail property={detail} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'property', property: detail })} />}
-      {modal?.type === 'wws' && <WwsModal onClose={() => setModal(null)} />}
+      {modal?.type === 'wws' && <WwsModal record={modal.record} onClose={() => setModal(null)} />}
+      {modal?.type === 'wwso' && <WwsoModal record={modal.record} onClose={() => setModal(null)} />}
     </div>
   )
 }

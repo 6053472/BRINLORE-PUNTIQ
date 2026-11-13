@@ -2,6 +2,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { dataDirectory } from './paths'
+import { checkProfileField } from './validation'
 
 export type UserProfile = {
   firstName: string
@@ -22,10 +23,13 @@ export type UserSettings = {
   compact: boolean
   reducedMotion: boolean
   emailNotifications: boolean
+  emailFrequency: 'daily' | 'weekly'
   notifyContracts: boolean
   notifyMaintenance: boolean
   notifyPayments: boolean
+  notifyIndexation: boolean
   contractReminderDays: number
+  paymentReminderDays: number
   rentIndexation: number
   defaultPaymentTermDays: number
   landingPage: string
@@ -57,10 +61,13 @@ export const defaultSettings: UserSettings = {
   compact: false,
   reducedMotion: false,
   emailNotifications: true,
+  emailFrequency: 'weekly',
   notifyContracts: true,
   notifyMaintenance: true,
   notifyPayments: true,
+  notifyIndexation: true,
   contractReminderDays: 90,
+  paymentReminderDays: 7,
   rentIndexation: 3.5,
   defaultPaymentTermDays: 14,
   landingPage: 'dashboard',
@@ -227,17 +234,22 @@ export function updateUser(id: number, update: ProfileUpdate): { user?: PublicUs
   if (update.profile) {
     for (const key of Object.keys(defaultProfile) as (keyof UserProfile)[]) {
       const value = trim(update.profile[key], key === 'address' ? 200 : 100)
-      if (value !== undefined) user.profile[key] = value
+      if (value === undefined) continue
+      const checked = checkProfileField(key, value)
+      if (checked.error) return { error: checked.error }
+      user.profile[key] = checked.value
     }
   }
   if (update.settings) {
     const s = update.settings
     const target = user.settings
     if (s.theme === 'light' || s.theme === 'dark' || s.theme === 'system') target.theme = s.theme
-    for (const key of ['compact', 'reducedMotion', 'emailNotifications', 'notifyContracts', 'notifyMaintenance', 'notifyPayments'] as const) {
+    for (const key of ['compact', 'reducedMotion', 'emailNotifications', 'notifyContracts', 'notifyMaintenance', 'notifyPayments', 'notifyIndexation'] as const) {
       if (typeof s[key] === 'boolean') target[key] = s[key]
     }
     if (Number.isFinite(s.contractReminderDays)) target.contractReminderDays = Math.min(365, Math.max(7, Math.round(Number(s.contractReminderDays))))
+    if (s.emailFrequency === 'daily' || s.emailFrequency === 'weekly') target.emailFrequency = s.emailFrequency
+    if (Number.isFinite(s.paymentReminderDays)) target.paymentReminderDays = Math.min(30, Math.max(1, Math.round(Number(s.paymentReminderDays))))
     if (Number.isFinite(s.rentIndexation)) target.rentIndexation = Math.min(25, Math.max(0, Number(s.rentIndexation)))
     if (Number.isFinite(s.defaultPaymentTermDays)) target.defaultPaymentTermDays = Math.min(90, Math.max(0, Math.round(Number(s.defaultPaymentTermDays))))
     if (typeof s.landingPage === 'string' && ['dashboard', 'properties', 'tenants', 'contracts', 'maintenance', 'finance'].includes(s.landingPage)) target.landingPage = s.landingPage

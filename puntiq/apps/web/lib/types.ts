@@ -6,6 +6,7 @@ export type ModuleId =
   | 'dashboard'
   | 'properties'
   | 'wws'
+  | 'wwso'
   | 'tenants'
   | 'contracts'
   | 'maintenance'
@@ -44,9 +45,30 @@ export type Contract = Base & { property: string; tenant: string; start: string;
 export type Maintenance = Base & { title: string; property: string; priority: string; status: string; date?: string; cost?: number; contractor?: string; description?: string }
 export type DocumentItem = Base & { name: string; category: string; property?: string; date?: string; size?: number; mime?: string; hasFile?: boolean }
 export type Payment = Base & { description: string; property?: string; tenant?: string; type: string; amount: number; dueDate: string; status: string; paidDate?: string }
-export type WwsCalculation = Base & { label: string; property?: string; date?: string; points?: number; rent?: number; segment?: string }
+export type WwsCalculation = Base & {
+  label: string
+  property?: string
+  date?: string
+  points?: number
+  rent?: number
+  segment?: string
+  regelset?: string
+  betrouwbaarheid?: 'officieel' | 'indicatief' | 'onvolledig'
+  invoer?: string
+}
 
-export type RecordKind = 'tenants' | 'contracts' | 'maintenance' | 'documents' | 'payments' | 'wws'
+export type WwsoCalculation = Base & {
+  label: string
+  property?: string
+  date?: string
+  points?: number
+  rent?: number
+  regelset?: string
+  betrouwbaarheid?: 'officieel' | 'indicatief' | 'onvolledig'
+  invoer?: string
+}
+
+export type RecordKind = 'tenants' | 'contracts' | 'maintenance' | 'documents' | 'payments' | 'wws' | 'wwso'
 export type RecordMap = {
   tenants: Tenant[]
   contracts: Contract[]
@@ -54,4 +76,5 @@ export type RecordMap = {
   documents: DocumentItem[]
   payments: Payment[]
   wws: WwsCalculation[]
+  wwso: WwsoCalculation[]
 }

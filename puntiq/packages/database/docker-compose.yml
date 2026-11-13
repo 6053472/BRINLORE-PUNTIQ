@@ -1,0 +1,21 @@
+# Lokale PostgreSQL voor ontwikkeling. Poort 5433 om botsing met een eventuele lokale installatie te voorkomen.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: puntiq-postgres
+    environment:
+      POSTGRES_USER: puntiq
+      POSTGRES_PASSWORD: puntiq
+      POSTGRES_DB: puntiq
+    ports:
+      - '5433:5432'
+    volumes:
+      - puntiq-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U puntiq -d puntiq']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  puntiq-pgdata:

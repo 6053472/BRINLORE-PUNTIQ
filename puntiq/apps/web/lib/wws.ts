@@ -87,7 +87,7 @@ const rentAnchors: Array<[number, number]> = [
   [40, 250.26],
   [100, 637.67],
   [143, 932.93],
-  [144, 939.79],
+  [144, 939.73],
   [186, 1228.07],
   [187, 1234.92],
   [250, 1667.4],
@@ -134,15 +134,13 @@ export function berekenWWS(input: WwsInput): WwsResult {
   const verkoeling = quarter(Math.min(nonNegative(input.gekoeldeVertrekken), 2))
   const energie = quarter(energyScore(input.energielabel, input.bouwjaar, input.woningType))
 
-  const keukenBasis = input.aanrechtLengteMeters >= 2 ? 7 : input.aanrechtLengteMeters >= 1 ? 4 : 0
+  const aanrecht = nonNegative(input.aanrechtLengteMeters)
+  const keukenBasis = aanrecht >= 2 ? 7 : aanrecht >= 1 ? 4 : 0
   const keukenExtra = Math.min(nonNegative(input.keukenExtraPunten), keukenBasis)
   const keuken = quarter(keukenBasis + keukenExtra)
   const sanitair = quarter(nonNegative(input.sanitairPunten))
-  const buitenruimte = quarter(
-    input.m2BuitenruimtePrive <= 0
-      ? -5
-      : Math.min(15, 2 + nonNegative(input.m2BuitenruimtePrive) * 0.35),
-  )
+  const buitenM2 = nonNegative(input.m2BuitenruimtePrive)
+  const buitenruimte = quarter(buitenM2 <= 0 ? -5 : Math.min(15, 2 + buitenM2 * 0.35))
   const basis = quarter(
     vertrekken + overigeRuimten + verwarming + verkoeling + energie + keuken + sanitair + buitenruimte,
   )
@@ -150,7 +148,7 @@ export function berekenWWS(input: WwsInput): WwsResult {
   const totaleOppervlakte = nonNegative(input.m2Vertrekken) + nonNegative(input.m2OverigeRuimten)
   const effectieveWoz = Math.max(nonNegative(input.wozWaarde), 85806)
   const deelTwee = totaleOppervlakte > 0
-    ? (effectieveWoz / totaleOppervlakte) / (input.isCoropAmsterdamUtrechtKlein ? 114 : 268)
+    ? (effectieveWoz / totaleOppervlakte) / (input.isCoropAmsterdamUtrechtKlein && totaleOppervlakte < 40 ? 114 : 268)
     : 0
   const wozRuw = quarter(effectieveWoz / 16954 + deelTwee)
   const ruwTotaal = basis + wozRuw

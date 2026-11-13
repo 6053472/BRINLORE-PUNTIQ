@@ -21,7 +21,6 @@ export function WwsModal({ onClose }: { onClose: () => void }) {
   const [applyToProperty, setApplyToProperty] = useState(true)
   const [busy, setBusy] = useState(false)
   const result = berekenWWS(input)
-  const maxRent = result.wettelijkeMaximumhuur ?? result.huurprijsMetOpslag
   const selected = properties.find(property => String(property.id) === propertyId)
 
   const setNumber = (name: keyof WwsInput, value: string) => setInput(current => ({ ...current, [name]: value === '' ? 0 : Math.max(0, Number(value)) }))
@@ -42,7 +41,7 @@ export function WwsModal({ onClose }: { onClose: () => void }) {
       property: selected?.name ?? '',
       date: today(),
       points: result.totaalPunten,
-      rent: maxRent,
+      rent: result.wettelijkeMaximumhuur ?? undefined,
       segment: result.huurSegment,
     })
     if (!saved) return setBusy(false)

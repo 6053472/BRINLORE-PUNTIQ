@@ -194,7 +194,7 @@ function ProfileSection({ onDirty }: { onDirty: DirtyHandler }) {
           <h2>{[p.firstName, p.lastName].filter(Boolean).join(' ') || user.username}</h2>
           <p className="muted">{p.jobTitle || (user.role === 'admin' ? 'Beheerder' : 'Vastgoedbeheerder')}{p.company && ` · ${p.company}`}</p>
           <div className="button-row">
-            <label className="button ghost small">Foto wijzigen<input type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} hidden /></label>
+            <label className="button ghost small">Foto wijzigen<input type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} className="sr" /></label>
             {user.avatar && <button type="button" className="link-button" onClick={removeAvatar}>Foto verwijderen</button>}
           </div>
         </div>
@@ -238,6 +238,7 @@ const strengthLabels = ['', 'Te zwak', 'Redelijk', 'Goed', 'Sterk']
 
 function SecuritySection({ onDirty }: { onDirty: DirtyHandler }) {
   const { user, logout, confirm } = useApp()
+  const saveSetting = useSettingSaver()
   const empty = { current: '', next: '', repeat: '' }
   const [values, setValues] = useState(empty)
   const [show, setShow] = useState(false)
@@ -316,6 +317,14 @@ function SecuritySection({ onDirty }: { onDirty: DirtyHandler }) {
           </div>
         </form>
       </Card>
+      <Card icon="lock" title="Automatisch uitloggen" text="Log automatisch uit na een periode zonder activiteit. Handig op gedeelde of onbeheerde computers.">
+        <SettingRow title="Uitloggen na inactiviteit" hint="Geldt voor dit account op elk apparaat waarop u inlogt.">
+          <select value={user.settings.idleLogoutMinutes} onChange={event => { void saveSetting('idleLogoutMinutes', Number(event.target.value)) }} aria-label="Automatisch uitloggen na inactiviteit">
+            <option value={0}>Nooit (alleen na 8 uur)</option>
+            {[15, 30, 60, 120].map(minutes => <option key={minutes} value={minutes}>{minutes < 60 ? `${minutes} minuten` : `${minutes / 60} uur`}</option>)}
+          </select>
+        </SettingRow>
+      </Card>
       <Card icon="shield" title="Sessies" text="Uw sessie is beveiligd met een ondertekende httpOnly-cookie en verloopt 8 uur na het inloggen.">
         <dl className="meta flat">
           <div><dt>Laatst ingelogd</dt><dd>{formatDateTime(user.lastLoginAt)}</dd></div>
@@ -362,6 +371,23 @@ function useSettingSaver() {
 
 const landingPages = [['dashboard', 'Overzicht'], ['properties', 'Vastgoed'], ['tenants', 'Huurders'], ['contracts', 'Contracten'], ['maintenance', 'Onderhoud'], ['finance', 'Financieel']]
 
+function InvoicePrefixSetting() {
+  const { user, notify } = useApp()
+  const set = useSettingSaver()
+  const [draft, setDraft] = useState(user.settings.invoicePrefix)
+  const valid = /^[A-Za-z0-9]{1,6}$/.test(draft.trim())
+  const commit = () => {
+    if (draft.trim().toUpperCase() === user.settings.invoicePrefix) return
+    if (!valid) return notify('Factuurprefix mag 1 tot 6 letters of cijfers bevatten.', 'error')
+    void set('invoicePrefix', draft.trim().toUpperCase())
+  }
+  return (
+    <SettingRow title="Factuurnummer-prefix" hint={`Nieuwe facturen krijgen automatisch nummers als ${(draft.trim() || 'F').toUpperCase()}${new Date().getFullYear()}-0001. Bestaande nummers veranderen niet.`}>
+      <input className="prefix-input" value={draft} maxLength={6} onChange={event => setDraft(event.target.value)} onBlur={commit} onKeyDown={event => event.key === 'Enter' && event.currentTarget.blur()} aria-label="Factuurnummer-prefix" aria-invalid={!valid} />
+    </SettingRow>
+  )
+}
+
 function PreferencesSection() {
   const { user } = useApp()
   const s = user.settings
@@ -378,6 +404,18 @@ function PreferencesSection() {
         </SettingRow>
         <SettingRow title="Compacte weergave" hint="Minder witruimte, meer informatie in beeld."><Toggle label="Compacte weergave" on={s.compact} onChange={value => set('compact', value)} /></SettingRow>
         <SettingRow title="Minder beweging" hint="Beperk animaties en overgangen."><Toggle label="Minder beweging" on={s.reducedMotion} onChange={value => set('reducedMotion', value)} /></SettingRow>
+        <SettingRow title="Lijsten per pagina" hint="Aantal rijen per pagina in woningen, contracten, financiën en overige lijsten.">
+          <select value={s.pageSize} onChange={event => set('pageSize', Number(event.target.value))} aria-label="Lijsten per pagina">
+            {[25, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}
+          </select>
+        </SettingRow>
+        <SettingRow title="Standaardweergave woningen" hint="Kaarten of tabel bij het openen van Vastgoed.">
+          <div className="segmented" role="group" aria-label="Standaardweergave woningen">
+            {(['grid', 'table'] as const).map(view => (
+              <button key={view} type="button" aria-pressed={s.propertyView === view} onClick={() => set('propertyView', view)}>{view === 'grid' ? 'Kaarten' : 'Tabel'}</button>
+            ))}
+          </div>
+        </SettingRow>
         <SettingRow title="Startpagina" hint="Waar u na het inloggen terechtkomt.">
           <select value={s.landingPage} onChange={event => set('landingPage', event.target.value)} aria-label="Startpagina">
             {landingPages.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -390,6 +428,12 @@ function PreferencesSection() {
         </SettingRow>
         <SettingRow title="Betalingstermijn" hint="Standaard aantal dagen tot de vervaldatum (0–90).">
           <NumberSetting value={s.defaultPaymentTermDays} min={0} max={90} step={1} suffix="dagen" label="Betalingstermijn in dagen" onSave={value => set('defaultPaymentTermDays', Math.round(value))} />
+        </SettingRow>
+        <InvoicePrefixSetting />
+        <SettingRow title="Standaard looptijd" hint="Voorgestelde einddatum bij nieuwe contracten voor bepaalde tijd.">
+          <select value={s.defaultLeaseMonths} onChange={event => set('defaultLeaseMonths', Number(event.target.value))} aria-label="Standaard looptijd in maanden">
+            {[6, 12, 24, 36, 60].map(months => <option key={months} value={months}>{months} maanden</option>)}
+          </select>
         </SettingRow>
       </Card>
     </>
@@ -449,9 +493,28 @@ function NotificationsSection() {
 }
 
 function PrivacySection() {
-  const { user, confirm } = useApp()
+  const { user, confirm, notify } = useApp()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [restoring, setRestoring] = useState(false)
+  const restore = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!(await confirm(`Alle huidige woningen en gegevens worden vervangen door de inhoud van "${file.name}". Dit kan niet ongedaan worden gemaakt.`, 'Terugzetten'))) return
+    setRestoring(true)
+    try {
+      const response = await fetch('/api/account/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: await file.text() })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) return notify(data?.error ?? 'Terugzetten mislukt.', 'error')
+      notify(`Back-up teruggezet: ${data.properties} woningen, ${data.records} items. De pagina wordt vernieuwd.`)
+      window.setTimeout(() => window.location.reload(), 1200)
+    } catch {
+      notify('Terugzetten mislukt.', 'error')
+    } finally {
+      setRestoring(false)
+    }
+  }
   const deleteAccount = async (event: FormEvent) => {
     event.preventDefault()
     if (!(await confirm('Uw account en alle bijbehorende gegevens worden definitief verwijderd. Dit kan niet ongedaan worden gemaakt.', 'Account verwijderen'))) return
@@ -463,6 +526,13 @@ function PrivacySection() {
     <>
       <Card icon="download" title="Uw gegevens" text="Download een kopie van al uw gegevens (JSON).">
         <a className="button ghost fit" href="/api/account/export" download><Icon name="download" size={16} /> Gegevens exporteren</a>
+      </Card>
+      <Card icon="folder" title="Back-up en terugzetten" text="Een volledige back-up bevat woningen met foto's, huurders, contracten, financiën, documenten en berekeningen.">
+        <div className="button-row">
+          <a className="button ghost fit" href="/api/account/backup" download><Icon name="download" size={16} /> Back-up downloaden</a>
+          <label className={`button ghost fit ${restoring ? 'disabled' : ''}`}><Icon name="upload" size={16} /> {restoring ? 'Terugzetten…' : 'Back-up terugzetten'}<input type="file" accept="application/json,.json" className="sr" disabled={restoring} onChange={restore} /></label>
+        </div>
+        <p className="muted small-text">Terugzetten vervangt alle huidige woningen en gegevens van dit account. Maak daarom eerst een back-up.</p>
       </Card>
       <Card icon="trash" title="Account verwijderen" text="Verwijdert uw account en alle woningen, huurders, contracten en documenten definitief.">
         {user.role === 'admin' ? <p className="muted">Het beheerdersaccount kan niet worden verwijderd.</p> : (

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { dataDirectory } from './paths'
@@ -33,6 +33,11 @@ export type UserSettings = {
   rentIndexation: number
   defaultPaymentTermDays: number
   landingPage: string
+  pageSize: number
+  propertyView: 'grid' | 'table'
+  defaultLeaseMonths: number
+  idleLogoutMinutes: number
+  invoicePrefix: string
 }
 
 type StoredUser = {
@@ -71,6 +76,11 @@ export const defaultSettings: UserSettings = {
   rentIndexation: 3.5,
   defaultPaymentTermDays: 14,
   landingPage: 'dashboard',
+  pageSize: 50,
+  propertyView: 'grid',
+  defaultLeaseMonths: 12,
+  idleLogoutMinutes: 0,
+  invoicePrefix: 'F',
 }
 
 const dataFile = path.join(dataDirectory, 'users.json')
@@ -93,18 +103,36 @@ function normalize(user: Partial<StoredUser>): StoredUser {
 }
 
 function readUsers(): StoredUser[] {
+  let text: string
   try {
-    const parsed = JSON.parse(readFileSync(dataFile, 'utf8')) as Partial<StoredUser>[]
-    return Array.isArray(parsed) ? parsed.map(normalize) : []
-  } catch {
-    return []
+    text = readFileSync(dataFile, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error // tijdelijk onleesbaar (bijv. bestandslock): nooit als "geen gebruikers" behandelen
   }
+  // Een beschadigd bestand mag nooit stilzwijgend worden overschreven met een lege lijst.
+  const parsed = JSON.parse(text) as Partial<StoredUser>[]
+  if (!Array.isArray(parsed)) throw new Error('users.json heeft een onverwacht formaat.')
+  return parsed.map(normalize)
 }
 
 function writeUsers(users: StoredUser[]) {
   const temporary = `${dataFile}.tmp`
   writeFileSync(temporary, `${JSON.stringify(users, null, 2)}\n`, 'utf8')
+  // Bewaar de vorige versie als vangnet.
+  if (existsSync(dataFile)) copyFileSync(dataFile, `${dataFile}.bak`)
   renameSync(temporary, dataFile)
+  const highest = users.reduce((max, user) => Math.max(max, user.id), 0)
+  if (highest > readCounter()) writeFileSync(counterFile, String(highest), 'utf8')
+}
+
+const counterFile = path.join(dataDirectory, '.last-user-id')
+function readCounter() {
+  try {
+    return Number(readFileSync(counterFile, 'utf8').trim()) || 0
+  } catch {
+    return 0
+  }
 }
 
 function hashPassword(password: string, salt = randomBytes(16).toString('hex')) {
@@ -126,7 +154,8 @@ function publicUser(user: StoredUser): PublicUser {
   return rest
 }
 
-const nextId = (users: StoredUser[]) => users.reduce((highest, current) => Math.max(highest, current.id), 0) + 1
+// Een id wordt nooit hergebruikt, ook niet na verwijderen: anders erft een nieuwe gebruiker oude data en sessies.
+const nextId = (users: StoredUser[]) => Math.max(readCounter(), users.reduce((highest, current) => Math.max(highest, current.id), 0)) + 1
 const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 export const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim())
 
@@ -135,7 +164,7 @@ function seedUsers() {
   const users = readUsers()
   let changed = false
   // Beheerder alleen aanmaken via PUNTIQ_ADMIN_PASSWORD; er bestaat geen standaardwachtwoord meer.
-  if (process.env.PUNTIQ_ADMIN_PASSWORD && !users.some(user => user.username === 'admin')) {
+  if (process.env.PUNTIQ_ADMIN_PASSWORD && !users.some(user => sameText(user.username, 'admin'))) {
     users.push(normalize({ id: nextId(users), username: 'admin', email: 'admin@brinlore.nl', passwordHash: hashPassword(process.env.PUNTIQ_ADMIN_PASSWORD), role: 'admin' }))
     changed = true
   }
@@ -168,6 +197,7 @@ export function passwordPolicyError(password: string) {
 export function createUser(username: string, email: string, password: string): { user?: PublicUser; error?: string } {
   const normalized = username.trim()
   const normalizedEmail = email.trim()
+  if (normalized.length > 40 || normalizedEmail.length > 254 || password.length > 256) return { error: 'Een of meer velden zijn te lang.' }
   if (normalized.length < 3 || !/^[\w.-]+$/.test(normalized)) return { error: 'Kies een gebruikersnaam van minimaal 3 tekens (letters, cijfers, punt, streepje).' }
   if (!isEmail(normalizedEmail)) return { error: 'Vul een geldig e-mailadres in.' }
   const policy = passwordPolicyError(password)
@@ -253,6 +283,15 @@ export function updateUser(id: number, update: ProfileUpdate): { user?: PublicUs
     if (Number.isFinite(s.rentIndexation)) target.rentIndexation = Math.min(25, Math.max(0, Number(s.rentIndexation)))
     if (Number.isFinite(s.defaultPaymentTermDays)) target.defaultPaymentTermDays = Math.min(90, Math.max(0, Math.round(Number(s.defaultPaymentTermDays))))
     if (typeof s.landingPage === 'string' && ['dashboard', 'properties', 'tenants', 'contracts', 'maintenance', 'finance'].includes(s.landingPage)) target.landingPage = s.landingPage
+    if ([25, 50, 100].includes(Number(s.pageSize))) target.pageSize = Number(s.pageSize)
+    if (s.propertyView === 'grid' || s.propertyView === 'table') target.propertyView = s.propertyView
+    if ([6, 12, 24, 36, 60].includes(Number(s.defaultLeaseMonths))) target.defaultLeaseMonths = Number(s.defaultLeaseMonths)
+    if (typeof s.invoicePrefix === 'string') {
+      const prefix = s.invoicePrefix.trim().toUpperCase()
+      if (!/^[A-Z0-9]{1,6}$/.test(prefix)) return { error: 'Factuurprefix mag 1 tot 6 letters of cijfers bevatten.' }
+      target.invoicePrefix = prefix
+    }
+    if ([0, 15, 30, 60, 120].includes(Number(s.idleLogoutMinutes))) target.idleLogoutMinutes = Number(s.idleLogoutMinutes)
   }
   writeUsers(users)
   return { user: publicUser(user) }

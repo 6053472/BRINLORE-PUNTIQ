@@ -157,7 +157,10 @@ function huurders(data: ReportData, options: ReportOptions): ReportDocument {
   const views = invoiceViews(s.invoices, s.payments, options.now)
   const finance = new Map(groupBy(views, s.payments, tenantKey).map(row => [row.key, row]))
   const rows = s.tenants.map(tenant => {
-    const contract = s.contracts.find(c => (c.tenantId === tenant.id || (!c.tenantId && c.tenant === tenant.name)) && c.status !== 'Concept')
+    // Voorkeur voor het lopende contract; anders het meest recente.
+    const contract = s.contracts
+      .filter(c => (c.tenantId === tenant.id || (!c.tenantId && c.tenant === tenant.name)) && c.status !== 'Concept')
+      .sort((a, b) => Number(b.status === 'Actief') - Number(a.status === 'Actief') || b.start.localeCompare(a.start))[0]
     const money = finance.get(`t${tenant.id}`) ?? finance.get(`n:${tenant.name}`)
     return {
       name: tenant.name, email: tenant.email ?? null, phone: tenant.phone ?? null, property: contract?.property ?? tenant.property ?? null,

@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
-import { EmptyState, Modal, PageHead, PanelHeading, Stat, Status } from './ui'
+import { EmptyState, Modal, PageHead, PanelHeading, Pagination, Stat, Status, usePagination } from './ui'
 import { contractState, daysUntilEnd } from '../lib/notifications'
-import { daysBetween, downloadCsv, formatBytes, formatDate, money, readFileAsDataUrl, today } from '../lib/format'
+import { addMonths, daysBetween, downloadCsv, formatBytes, formatDate, money, readFileAsDataUrl, today } from '../lib/format'
 import type { Contract, ContractTerm, DocumentItem, Property, Tenant } from '../lib/types'
 
 const MAX_UPLOAD = 5 * 1024 * 1024
@@ -55,7 +55,7 @@ async function uploadDocument(saveRecord: ReturnType<typeof useApp>['saveRecord'
 const NEW_TENANT = '__nieuw__'
 
 function ContractForm({ contract, onClose, onSaved }: { contract?: Contract; onClose: () => void; onSaved: (contract: Contract) => void }) {
-  const { properties, records, saveRecord, notify } = useApp()
+  const { user, properties, records, saveRecord, notify } = useApp()
   const { propertyOf, tenantOf } = useLinks()
   const [propertyId, setPropertyId] = useState(() => String(contract ? propertyOf(contract)?.id ?? '' : ''))
   const [tenantId, setTenantId] = useState(() => String(contract ? tenantOf(contract)?.id ?? '' : ''))
@@ -103,6 +103,9 @@ function ContractForm({ contract, onClose, onSaved }: { contract?: Contract; onC
       if (!created) return setBusy(false)
       tenant = created as Tenant
       tenantName = tenant.name
+      // Mislukt het opslaan van het contract hierna, dan wordt bij opnieuw proberen geen tweede huurder aangemaakt.
+      setTenantId(String(tenant.id))
+      setNewTenant('')
     }
     if (!tenantName) {
       setBusy(false)
@@ -173,7 +176,7 @@ function ContractForm({ contract, onClose, onSaved }: { contract?: Contract; onC
         </label>
         <label>Startdatum<abbr title="Verplicht"> *</abbr><input name="start" type="date" defaultValue={contract?.start ?? today()} required /></label>
         {term === 'Bepaalde tijd'
-          ? <label>Einddatum<abbr title="Verplicht"> *</abbr><input name="end" type="date" defaultValue={contract?.end ?? ''} required /></label>
+          ? <label>Einddatum<abbr title="Verplicht"> *</abbr><input name="end" type="date" defaultValue={contract?.end ?? addMonths(today(), user.settings.defaultLeaseMonths)} required /></label>
           : <span className="muted small-text form-note">Geen einddatum bij onbepaalde tijd.</span>}
         <label>Huurprijs per maand (€)<input name="rent" type="number" min="0" step="0.01" defaultValue={contract?.rent ?? ''} placeholder="kale huur" /></label>
         <label>Waarborgsom (€)<input name="deposit" type="number" min="0" step="0.01" defaultValue={contract?.deposit ?? ''} /></label>
@@ -232,10 +235,10 @@ function ContractDetail({ contract, onClose, onEdit }: { contract: Contract; onC
     const date = String(new FormData(event.currentTarget).get('date'))
     if (action === 'verlengen') {
       if (date <= (contract.end ?? contract.start)) return notify('De nieuwe einddatum moet na de huidige einddatum liggen.', 'error')
-      if (await saveRecord('contracts', { end: date, term: 'Bepaalde tijd', status: 'Actief' }, contract.id)) notify(`Contract verlengd tot ${formatDate(date)}`)
+      if (await saveRecord('contracts', { end: date, term: 'Bepaalde tijd', status: contract.status === 'Concept' ? 'Concept' : 'Actief' }, contract.id)) notify(`Contract verlengd tot ${formatDate(date)}`)
     } else if (action === 'beeindigen') {
       if (date < contract.start) return notify('De einddatum ligt vóór de startdatum.', 'error')
-      if (await saveRecord('contracts', { status: 'Beëindigd', terminatedOn: date, end: date }, contract.id)) notify('Contract beëindigd')
+      if (await saveRecord('contracts', { status: 'Beëindigd', terminatedOn: date, end: date, term: 'Bepaalde tijd' }, contract.id)) notify('Contract beëindigd')
     }
     setAction(null)
   }
@@ -333,7 +336,7 @@ function ContractDetail({ contract, onClose, onEdit }: { contract: Contract; onC
           </ul>
           <label className={`button ghost small fit ${busy ? 'disabled' : ''}`}>
             <Icon name="plus" size={14} /> {busy ? 'Uploaden…' : 'Document uploaden'}
-            <input type="file" accept={ACCEPT} onChange={upload} hidden disabled={busy} />
+            <input type="file" accept={ACCEPT} onChange={upload} className="sr" disabled={busy} />
           </label>
           {preview && (
             <div className="contract-preview">
@@ -381,6 +384,7 @@ export function ContractsModule({ focusId, onFocusHandled }: { focusId?: number 
       .sort((a, b) => STATES.indexOf(a.state) - STATES.indexOf(b.state) || (a.contract.end ?? '9999').localeCompare(b.contract.end ?? '9999'))
   }, [rows, query, stateFilter])
 
+  const pager = usePagination(visible, user.settings.pageSize, `${query}|${stateFilter}`)
   const detail = records.contracts.find(contract => contract.id === detailId)
 
   return (
@@ -438,7 +442,7 @@ export function ContractsModule({ focusId, onFocusHandled }: { focusId?: number 
             <table className="clickable-rows">
               <thead><tr><th>Woning</th><th>Huurder</th><th>Startdatum</th><th>Einddatum</th><th className="right">Huur / maand</th><th>Status</th><th><span className="sr">Documenten</span></th></tr></thead>
               <tbody>
-                {visible.map(({ contract, state }) => {
+                {pager.slice.map(({ contract, state }) => {
                   const docs = documentsOf(contract).length
                   return (
                     <tr key={contract.id} onClick={() => setDetailId(contract.id)}>
@@ -456,6 +460,7 @@ export function ContractsModule({ focusId, onFocusHandled }: { focusId?: number 
             </table>
           </div>
         )}
+        {!loading && visible.length > 0 && <Pagination pager={pager} noun="contracten" />}
       </div>
 
       {detail && !editing && <ContractDetail key={detail.id} contract={detail} onClose={() => setDetailId(null)} onEdit={() => setEditing(detail)} />}

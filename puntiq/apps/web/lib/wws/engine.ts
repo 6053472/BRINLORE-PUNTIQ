@@ -225,6 +225,7 @@ export function berekenWws(invoer: WwsInvoer, regelset: Regelset): WwsUitkomst {
       if (woz > max) {
         wozRubriek.stappen.push(`Totaal ≥ ${fmt(plafond.vanafTotaal)}: WOZ-punten maximaal ${fmt(plafond.maxAandeel * 100)}% van het totaal → ${fmt(cents(max))}`)
         woz = max
+        wozRubriek.punten = cents(max)
       }
       begrensd = true
     }

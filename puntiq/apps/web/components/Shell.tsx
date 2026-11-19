@@ -116,7 +116,7 @@ export function Shell() {
         event.preventDefault()
         searchRef.current?.focus()
         setPopover('search')
-      } else if (event.key === 'Escape') setPopover(null)
+      } else if (event.key === 'Escape') { setPopover(null); setMenuOpen(false) }
     }
     const onClick = (event: MouseEvent) => {
       if (!(event.target as HTMLElement).closest('[data-popover]')) setPopover(null)
@@ -167,7 +167,7 @@ export function Shell() {
 
   return (
     <div className="app-shell">
-      <a className="skip" href="#main">Naar inhoud</a>
+      <a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById("main")?.focus() }}>Naar inhoud</a>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="brand">
@@ -206,7 +206,7 @@ export function Shell() {
 
       <section className="content">
         <header className="topbar">
-          <button type="button" className="icon-button menu-button" aria-label="Menu openen" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button>
+          <button type="button" className="icon-button menu-button" aria-label="Menu openen" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" /></button>
           <div className="breadcrumbs"><span>{workspace}</span><b>/</b><strong>{title}</strong></div>
           <div className="top-search" data-popover>
             <Icon name="search" size={16} />
@@ -266,7 +266,7 @@ export function Shell() {
         </header>
 
         {site?.announcement && <div className={`announcement ${site.announcementTone}`} role="status"><Icon name={site.announcementTone === 'warning' ? 'alert' : 'bell'} size={16} /> {site.announcement}</div>}
-        <main id="main" className="page-body">
+        <main id="main" tabIndex={-1} className="page-body">
           {active === 'dashboard' && <Dashboard onNavigate={openTarget} onAdd={() => setModal({ type: 'property' })} onWws={() => setModal({ type: 'wws' })} onSelect={select} />}
           {active === 'properties' && <PropertiesModule onSelect={select} onAdd={() => setModal({ type: 'property' })} />}
           {active === 'wws' && <WwsModule onCalculate={() => setModal({ type: 'wws' })} onOpen={record => setModal({ type: 'wws', record })} />}

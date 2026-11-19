@@ -3,7 +3,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
-import { EmptyState, Modal, PageHead, PanelHeading, Stat } from './ui'
+import { EmptyState, Modal, PageHead, PanelHeading, Pagination, Stat, usePagination } from './ui'
+import { RecheckModal } from './Recheck'
+import { controleerWwsBerekening } from '../lib/recheck'
 import {
   berekenWws, betrouwbaarheidLabel, controleerRegelset, energielabels, kiesRegelset, legeInvoer, nieuweRuimte,
   type Betrouwbaarheid, type CatalogusItem, type Energielabel, type RegelStatus, type Ruimte, type RubriekId, type WwsInvoer, type WwsUitkomst,
@@ -47,7 +49,8 @@ function NumberInput({ value, onChange, step = 1, min = 0, placeholder, label }:
     <input
       type="number" inputMode="decimal" min={min} step={step} placeholder={placeholder} aria-label={label}
       value={value ?? ''}
-      onChange={event => onChange(event.target.value === '' ? null : Math.max(min, Number(event.target.value)))}
+      onChange={event => onChange(event.target.value === '' ? null : Number(event.target.value))}
+      onBlur={() => { if (value !== null && value < min) onChange(min) }}
     />
   )
 }
@@ -176,7 +179,7 @@ export function WwsModal({ onClose, record }: { onClose: () => void; record?: Ww
   const [invoer, setInvoer] = useState<WwsInvoer>(() => parseInvoer(record) ?? legeInvoer(today()))
   const [propertyId, setPropertyId] = useState(() => String(properties.find(property => property.name === record?.property)?.id ?? ''))
   const [label, setLabel] = useState(record?.label ?? '')
-  const [applyToProperty, setApplyToProperty] = useState(true)
+  const [applyToProperty, setApplyToProperty] = useState(!record)
   const [busy, setBusy] = useState(false)
 
   const regelset = useMemo(() => kiesRegelset(invoer.peildatum), [invoer.peildatum])
@@ -224,8 +227,8 @@ export function WwsModal({ onClose, record }: { onClose: () => void; record?: Ww
     }, record?.id)
     if (!saved) return setBusy(false)
     const apply = selected && applyToProperty && uitkomst.totaalPunten !== null
-    if (apply) await saveProperty({ ...selected, points: uitkomst.totaalPunten!, rent: uitkomst.maximaleHuur ?? selected.rent }, selected.id)
-    notify(apply ? 'Berekening opgeslagen en toegepast op de woning' : 'WWS-berekening opgeslagen')
+    const applied = apply ? await saveProperty({ ...selected, points: uitkomst.totaalPunten!, rent: uitkomst.maximaleHuur ?? selected.rent }, selected.id) : null
+    notify(applied ? 'Berekening opgeslagen en toegepast op de woning' : apply ? 'Berekening opgeslagen, maar toepassen op de woning is mislukt' : 'WWS-berekening opgeslagen', apply && !applied ? 'error' : 'ok')
     onClose()
   }
 
@@ -378,6 +381,10 @@ function RegelsetStatus() {
 
 export function WwsModule({ onCalculate, onOpen }: { onCalculate: () => void; onOpen: (record: WwsCalculation) => void }) {
   const { properties, records, removeRecord, confirm, notify } = useApp()
+  const lijst = records.wws
+  const [controleren, setControleren] = useState(false)
+  const pager = usePagination(lijst, 25)
+  const controleRijen = useMemo(() => (controleren ? lijst.map(item => ({ id: item.id, label: item.label, date: item.date, points: item.points, rent: item.rent, controle: controleerWwsBerekening(item) })) : []), [controleren, lijst])
   const year = String(new Date().getFullYear())
   const thisYear = records.wws.filter(item => (item.date ?? item.createdAt).startsWith(year)).length
   const scored = properties.filter(property => property.points > 0)
@@ -390,6 +397,7 @@ export function WwsModule({ onCalculate, onOpen }: { onCalculate: () => void; on
   return (
     <>
       <PageHead eyebrow="WWS" title="Woningwaardering" description="Bereken WWS-punten en de maximale huurprijs van zelfstandige woningen.">
+        <button type="button" className="button ghost" disabled={!lijst.length} onClick={() => setControleren(true)}><Icon name="check" size={16} /> Berekeningen controleren</button>
         <button type="button" className="button" onClick={onCalculate}><Icon name="calc" size={16} /> Nieuwe berekening</button>
       </PageHead>
       <div className="stats-grid">
@@ -408,7 +416,7 @@ export function WwsModule({ onCalculate, onOpen }: { onCalculate: () => void; on
             <table>
               <thead><tr><th>Object</th><th>Peildatum</th><th>Punten</th><th>Segment</th><th>Uitkomst</th><th className="right">Max. huur</th><th /></tr></thead>
               <tbody>
-                {records.wws.map(item => (
+                {pager.slice.map(item => (
                   <tr key={item.id}>
                     <td><button type="button" className="link-button strong" onClick={() => onOpen(item)} disabled={!item.invoer} title={item.invoer ? 'Openen' : 'Oudere berekening zonder invoergegevens'}>{item.label}</button></td>
                     <td>{formatDate(item.date)}</td>
@@ -423,7 +431,16 @@ export function WwsModule({ onCalculate, onOpen }: { onCalculate: () => void; on
             </table>
           </div>
         )}
+        {lijst.length > 0 && <Pagination pager={pager} noun="berekeningen" />}
       </div>
+      {controleren && (
+        <RecheckModal
+          title="WWS-berekeningen controleren"
+          rows={controleRijen}
+          onOpen={id => { const item = lijst.find(entry => entry.id === id); if (item) { setControleren(false); onOpen(item) } }}
+          onClose={() => setControleren(false)}
+        />
+      )}
     </>
   )
 }

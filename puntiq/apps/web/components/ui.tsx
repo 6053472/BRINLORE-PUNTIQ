@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Icon } from './icons'
 import { slug } from '../lib/format'
 
@@ -24,6 +24,16 @@ export function Modal({ title, eyebrow, subtitle, onClose, onSubmit, wide, child
       document.body.style.overflow = previous
     }
   }, [onClose])
+
+  // Alleen bij openen/sluiten (niet bij elke render, anders springt de focus tijdens het typen).
+  useEffect(() => {
+    // Toetsenbordfocus naar binnen bij openen en terug naar de knop die het modal opende bij sluiten.
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]')
+    const dialog = dialogs[dialogs.length - 1]
+    if (dialog && !dialog.contains(document.activeElement)) (dialog.querySelector<HTMLElement>('.modal-body input, .modal-body select, .modal-body textarea') ?? dialog.querySelector<HTMLElement>('.modal-actions button, .icon-button'))?.focus({ preventScroll: true })
+    return () => { if (opener?.isConnected) opener.focus({ preventScroll: true }) }
+  }, [])
   const Shell = onSubmit ? 'form' : 'div'
   return (
     <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
@@ -96,9 +106,42 @@ export function EmptyState({ icon = 'folder', title, text, action }: { icon?: st
   )
 }
 
-export function Toggle({ on, onChange, label }: { on: boolean; onChange: (value: boolean) => void; label: string }) {
+/**
+ * Paginering voor lange lijsten (het systeem is ontworpen voor duizenden woningen).
+ * `resetKey` verandert bij zoeken/filteren/sorteren en brengt de lijst terug naar pagina 1.
+ */
+export function usePagination<T>(items: T[], pageSize: number, resetKey = '') {
+  const key = `${resetKey}|${pageSize}`
+  const [state, setState] = useState({ page: 1, key })
+  const setPage = (page: number) => setState({ page, key })
+  const pages = Math.max(1, Math.ceil(items.length / pageSize))
+  // Een andere zoekopdracht/filter (andere sleutel) valt automatisch terug op pagina 1.
+  const current = Math.min(state.key === key ? state.page : 1, pages)
+  const slice = useMemo(() => items.slice((current - 1) * pageSize, current * pageSize), [items, current, pageSize])
+  return { slice, page: current, pages, setPage, total: items.length, pageSize }
+}
+
+export function Pagination({ pager, noun = 'resultaten' }: { pager: { page: number; pages: number; setPage: (page: number) => void; total: number; pageSize: number }; noun?: string }) {
+  if (pager.total <= pager.pageSize) return null
+  const from = (pager.page - 1) * pager.pageSize + 1
+  const to = Math.min(pager.total, pager.page * pager.pageSize)
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} className={`toggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)}>
+    <nav className="pagination" aria-label="Paginering">
+      <span className="muted">{from.toLocaleString('nl-NL')}–{to.toLocaleString('nl-NL')} van {pager.total.toLocaleString('nl-NL')} {noun}</span>
+      <div>
+        <button type="button" className="button ghost small" disabled={pager.page === 1} onClick={() => pager.setPage(1)} aria-label="Eerste pagina">«</button>
+        <button type="button" className="button ghost small" disabled={pager.page === 1} onClick={() => pager.setPage(pager.page - 1)}>Vorige</button>
+        <span className="page-indicator" aria-current="page">Pagina {pager.page} van {pager.pages}</span>
+        <button type="button" className="button ghost small" disabled={pager.page === pager.pages} onClick={() => pager.setPage(pager.page + 1)}>Volgende</button>
+        <button type="button" className="button ghost small" disabled={pager.page === pager.pages} onClick={() => pager.setPage(pager.pages)} aria-label="Laatste pagina">»</button>
+      </div>
+    </nav>
+  )
+}
+
+export function Toggle({ on, onChange, label, disabled }: { on: boolean; onChange: (value: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} className={`toggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)}>
       <span />
     </button>
   )

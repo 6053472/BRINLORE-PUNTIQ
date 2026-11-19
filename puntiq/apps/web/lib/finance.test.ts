@@ -153,3 +153,8 @@ describe('meldingen', () => {
     assert.equal(buildNotifications({ contracts: [], maintenance: [], invoices: [f], payments: [betaling({ invoiceId: f.id })], properties: [], settings }).length, 0)
   })
 })
+
+test('factuurnummer gebruikt het ingestelde voorvoegsel', () => {
+  assert.equal(nextInvoiceNumber([], 2026, 'BRN'), 'BRN2026-0001')
+  assert.equal(nextInvoiceNumber(['BRN2026-0004', 'F2026-0009'], 2026, 'BRN'), 'BRN2026-0005')
+})

@@ -20,6 +20,7 @@ const paths: Record<string, ReactNode> = {
   edit: <path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4" />,
   trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />,
   download: <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />,
+  upload: <path d="M12 16V5M7 9l5-5 5 5M5 20h14" />,
   check: <path d="m5 12 5 5 9-10" />,
   chevron: <path d="m6 9 6 6 6-6" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,

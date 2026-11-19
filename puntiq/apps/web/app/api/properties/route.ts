@@ -1,12 +1,12 @@
 import { currentUser, json, unauthorized } from '../../../lib/auth'
-import { createProperty, listProperties, parsePropertyInput } from '../../../lib/properties'
+import { createProperty, listPropertySummaries, parsePropertyInput } from '../../../lib/properties'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
   const user = currentUser(request)
   if (!user) return unauthorized()
-  return json({ properties: listProperties(user.id) })
+  return json({ properties: listPropertySummaries(user.id) })
 }
 
 export async function POST(request: Request) {

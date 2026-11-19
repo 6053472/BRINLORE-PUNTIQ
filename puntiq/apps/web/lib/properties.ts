@@ -50,7 +50,7 @@ export type StoredProperty = {
 
 const databaseFile = path.join(dataDirectory, 'puntiq.sqlite')
 
-function openDatabase() {
+export function openDatabase() {
   const database = new (getDatabaseClass())(databaseFile)
   database.exec(`
     CREATE TABLE IF NOT EXISTS properties (
@@ -116,6 +116,43 @@ export function listProperties(userId: number) {
   }
 }
 
+/** Woning zonder foto's (die zijn groot); `imageCount` zegt hoeveel foto's er zijn. */
+export type PropertySummary = Omit<StoredProperty, 'image' | 'images'> & { imageCount: number }
+
+/** Lijst voor het overzicht: leest de foto's niet in, zodat duizenden woningen snel laden. */
+export function listPropertySummaries(userId: number): PropertySummary[] {
+  const database = openDatabase()
+  try {
+    return database.prepare(`
+      SELECT id, user_id, name, address, type, status, points, rent, area, rooms, bedrooms, year_built, energy_label, floor, price, description,
+        CASE WHEN json_array_length(images_json) > 0 THEN json_array_length(images_json)
+             WHEN image IS NOT NULL AND image != '' THEN 1 ELSE 0 END AS image_count
+      FROM properties WHERE user_id = ? ORDER BY id DESC
+    `).all(userId).map(row => {
+      const { image, images, ...rest } = mapProperty(row)
+      void image
+      void images
+      return { ...rest, imageCount: Number(row.image_count) }
+    })
+  } finally {
+    database.close()
+  }
+}
+
+/** Eén foto (data-URL) van een woning van deze gebruiker, of null. */
+export function getPropertyImage(userId: number, id: number, index: number) {
+  const database = openDatabase()
+  try {
+    const row = database.prepare('SELECT image, images_json FROM properties WHERE id = ? AND user_id = ?').get(id, userId)
+    if (!row) return null
+    const list = mapProperty({ ...row, id, user_id: userId, name: '', address: '', type: '', status: '', points: 0, rent: 0 })
+    const images = list.images?.length ? list.images : list.image ? [list.image] : []
+    return images[index] ?? null
+  } finally {
+    database.close()
+  }
+}
+
 export function createProperty(userId: number, input: Omit<StoredProperty, 'id' | 'userId'>) {
   const database = openDatabase()
   try {
@@ -144,6 +181,52 @@ export function createProperty(userId: number, input: Omit<StoredProperty, 'id' 
     )
     const id = Number(result.lastInsertRowid)
     return mapProperty(database.prepare('SELECT * FROM properties WHERE id = ?').get(id) as Record<string, unknown>)
+  } finally {
+    database.close()
+  }
+}
+
+export const MAX_IMPORT = 5000
+
+/**
+ * Importeert woningen in één transactie (alles of niets). Woningen met dezelfde naam én hetzelfde adres
+ * als een bestaande woning worden overgeslagen, zodat een bestand veilig opnieuw kan worden aangeboden.
+ */
+export function importProperties(userId: number, rows: unknown[]) {
+  const database = openDatabase()
+  try {
+    const known = new Set(
+      database.prepare('SELECT name, address FROM properties WHERE user_id = ?').all(userId).map(row => `${String(row.name).toLowerCase()}|${String(row.address).toLowerCase()}`),
+    )
+    const lastBefore = Number((database.prepare('SELECT COALESCE(MAX(id), 0) AS id FROM properties').get() as { id: number }).id)
+    const errors: { line: number; message: string }[] = []
+    let skipped = 0
+    const insert = database.prepare(`
+      INSERT INTO properties
+        (user_id, name, address, type, status, points, rent, image, images_json, area, rooms, bedrooms, year_built, energy_label, floor, price, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    database.exec('BEGIN')
+    try {
+      rows.forEach((raw, index) => {
+        const { data, error } = parsePropertyInput(raw)
+        if (!data) return void errors.push({ line: index + 2, message: error ?? 'Ongeldige regel.' })
+        const key = `${data.name.toLowerCase()}|${data.address.toLowerCase()}`
+        if (known.has(key)) return void (skipped += 1)
+        known.add(key)
+        insert.run(
+          userId, data.name, data.address, data.type, data.status, data.points, data.rent,
+          data.area ?? null, data.rooms ?? null, data.bedrooms ?? null, data.yearBuilt ?? null,
+          data.energyLabel ?? null, data.floor ?? null, data.price ?? null, data.description ?? null,
+        )
+      })
+      database.exec('COMMIT')
+    } catch (failure) {
+      database.exec('ROLLBACK')
+      throw failure
+    }
+    const created = database.prepare('SELECT * FROM properties WHERE user_id = ? AND id > ? ORDER BY id DESC').all(userId, lastBefore).map(mapProperty)
+    return { created, skipped, errors }
   } finally {
     database.close()
   }
@@ -204,7 +287,7 @@ export const propertyTypes = ['Zelfstandig', 'Onzelfstandig', 'Bedrijfsruimte']
 const MAX_IMAGE_CHARS = 6_000_000
 
 /** Validates untrusted JSON from the client into a StoredProperty payload. */
-export function parsePropertyInput(body: unknown, fallbackStatus = 'Beschikbaar'): { data?: Omit<StoredProperty, 'id' | 'userId'>; error?: string } {
+export function parsePropertyInput(body: unknown, fallbackStatus = 'Beschikbaar', fallbackType = 'Zelfstandig'): { data?: Omit<StoredProperty, 'id' | 'userId'>; error?: string } {
   if (!body || typeof body !== 'object') return { error: 'Ongeldige invoer.' }
   const b = body as Record<string, unknown>
   const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
@@ -215,7 +298,7 @@ export function parsePropertyInput(body: unknown, fallbackStatus = 'Beschikbaar'
   const name = text(b.name, 160)
   const address = text(b.address, 200)
   if (!name || !address) return { error: 'Naam en adres zijn verplicht.' }
-  const type = typeof b.type === 'string' && propertyTypes.includes(b.type) ? b.type : 'Zelfstandig'
+  const type = typeof b.type === 'string' && propertyTypes.includes(b.type) ? b.type : fallbackType
   const status = typeof b.status === 'string' && propertyStatuses.includes(b.status) ? b.status : fallbackStatus
   const images = Array.isArray(b.images) ? b.images.filter((image): image is string => typeof image === 'string' && image.startsWith('data:image/')).slice(0, 12) : []
   if (images.some(image => image.length > MAX_IMAGE_CHARS)) return { error: 'Een foto is te groot (maximaal 4 MB per foto).' }

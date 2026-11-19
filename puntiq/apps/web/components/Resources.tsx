@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
-import { EmptyState, Modal, PageHead, Status } from './ui'
+import { EmptyState, Modal, PageHead, Pagination, Status, usePagination } from './ui'
 import { downloadCsv, formatBytes, formatDate, money, readFileAsDataUrl, today } from '../lib/format'
 import type { DocumentItem, Maintenance, RecordKind, Tenant } from '../lib/types'
 
@@ -122,7 +122,7 @@ export function ResourceModule<T extends { id: number }>({ kind, eyebrow, title,
   extraActions?: ReactNode
   normalize?: (values: Record<string, unknown>) => Record<string, unknown>
 }) {
-  const { saveRecord, removeRecord, confirm, notify, loading } = useApp()
+  const { user, saveRecord, removeRecord, confirm, notify, loading } = useApp()
   const [query, setQuery] = useState('')
   const [filterValue, setFilterValue] = useState('')
   const [sort, setSort] = useState<{ index: number; dir: 1 | -1 } | null>(null)
@@ -137,6 +137,8 @@ export function ResourceModule<T extends { id: number }>({ kind, eyebrow, title,
     }
     return list
   }, [rows, query, filterValue, sort, columns, filter, searchText])
+
+  const pager = usePagination(visible, user.settings.pageSize,`${query}|${filterValue}|${sort?.index}|${sort?.dir}`)
 
   const save = async (values: Record<string, unknown>) => {
     const editingRow = editing !== 'new' && editing ? editing : null
@@ -201,7 +203,7 @@ export function ResourceModule<T extends { id: number }>({ kind, eyebrow, title,
                 </tr>
               </thead>
               <tbody>
-                {visible.map(row => (
+                {pager.slice.map(row => (
                   <tr key={row.id}>
                     {columns.map(column => <td key={column.label} className={column.align}>{column.render(row)}</td>)}
                     <td className="right row-actions">
@@ -215,6 +217,7 @@ export function ResourceModule<T extends { id: number }>({ kind, eyebrow, title,
             </table>
           </div>
         )}
+        {!loading && visible.length > 0 && <Pagination pager={pager} />}
       </div>
       {editing && (
         <RecordForm

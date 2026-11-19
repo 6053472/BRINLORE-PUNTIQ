@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
-import { EmptyState, Modal, PageHead, PanelHeading, Stat, Status } from './ui'
+import { EmptyState, Modal, PageHead, PanelHeading, Pagination, Stat, Status, usePagination } from './ui'
 import {
   aging, groupBy, invoiceStates, invoiceViews, monthly, propertyKey, tenantKey, totals,
   type GroupRow, type InvoiceState, type InvoiceView,
@@ -80,7 +80,7 @@ function InvoiceForm({ invoice, onClose }: { invoice?: Invoice; onClose: () => v
   const chooseTenant = (id: string) => {
     setTenantId(id)
     const contract = activeContractOf(tenantById(Number(id)))
-    if (!contract) return
+    if (!contract) return setContractId('')
     setContractId(String(contract.id))
     const property = propertyById(contract.propertyId) ?? properties.find(item => item.name === contract.property)
     if (property) setPropertyId(String(property.id))
@@ -91,6 +91,7 @@ function InvoiceForm({ invoice, onClose }: { invoice?: Invoice; onClose: () => v
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     if (dueDate < issueDate) return setError('De vervaldatum ligt vóór de factuurdatum.')
+    if (!(Number(amount) > 0)) return setError('Vul een bedrag groter dan € 0 in.')
     const tenant = tenantById(Number(tenantId))
     const property = propertyById(Number(propertyId))
     setBusy(true)
@@ -144,7 +145,7 @@ function InvoiceForm({ invoice, onClose }: { invoice?: Invoice; onClose: () => v
           <select value={type} onChange={event => setType(event.target.value as InvoiceType)}>{TYPES.map(item => <option key={item}>{item}</option>)}</select>
         </label>
         <label className="wide-field">Omschrijving<abbr title="Verplicht"> *</abbr><input name="description" defaultValue={invoice?.description ?? ''} required placeholder="bijv. Huur december 2026" /></label>
-        <label>Bedrag (€)<abbr title="Verplicht"> *</abbr><input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} required /></label>
+        <label>Bedrag (€)<abbr title="Verplicht"> *</abbr><input type="number" min="0.01" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} required /></label>
         {type === 'Huur' ? <label>Huurperiode<input name="period" type="month" defaultValue={invoice?.period ?? monthKey(today())} /></label> : <span />}
         <label>Factuurdatum<input type="date" value={issueDate} onChange={event => setIssueDate(event.target.value)} required /></label>
         <label>Vervaldatum<input type="date" value={dueDate} min={issueDate} onChange={event => setDueDate(event.target.value)} required /></label>
@@ -166,7 +167,7 @@ function PaymentForm({ payment, invoice, views, onClose }: { payment?: Payment; 
   const [propertyId, setPropertyId] = useState(String(payment?.propertyId ?? invoice?.propertyId ?? ''))
   const [busy, setBusy] = useState(false)
   // Saldo van de factuur exclusief deze betaling (bij bewerken).
-  const balanceBefore = linked ? linked.balance + (payment && payment.invoiceId === linked.id ? payment.amount : 0) : 0
+  const balanceBefore = linked ? linked.amount - (linked.paid - (payment && payment.invoiceId === linked.id ? payment.amount : 0)) : 0
   const over = linked && Number(amount) > balanceBefore + 0.005
 
   const chooseInvoice = (id: string) => {
@@ -304,6 +305,7 @@ function InvoiceDetail({ view, onClose, onEdit, onPay, onEditPayment }: { view: 
 /* ---------- Overzicht ---------- */
 
 function GroupTable({ title, subtitle, rows, onPick }: { title: string; subtitle: string; rows: GroupRow[]; onPick: (row: GroupRow) => void }) {
+  const pager = usePagination(rows, 25, title)
   return (
     <div className="panel">
       <PanelHeading title={title} subtitle={subtitle} />
@@ -312,7 +314,7 @@ function GroupTable({ title, subtitle, rows, onPick }: { title: string; subtitle
           <table className="clickable-rows">
             <thead><tr><th>Naam</th><th className="right">Gefactureerd</th><th className="right">Ontvangen</th><th className="right">Openstaand</th><th className="right">Achterstallig</th><th>Oudste achterstand</th></tr></thead>
             <tbody>
-              {rows.map(row => (
+              {pager.slice.map(row => (
                 <tr key={row.key} onClick={() => onPick(row)}>
                   <td><button type="button" className="link-button strong" onClick={event => { event.stopPropagation(); onPick(row) }}>{row.label}</button></td>
                   <td className="right">{money(row.invoiced)}</td>
@@ -326,6 +328,7 @@ function GroupTable({ title, subtitle, rows, onPick }: { title: string; subtitle
           </table>
         </div>
       )}
+      {rows.length > 0 && <Pagination pager={pager} />}
     </div>
   )
 }
@@ -365,7 +368,7 @@ export function FinanceModule({ focusInvoiceId, onFocusHandled }: { focusInvoice
   const chart = monthly(scopedViews, scopedPayments, months.map(month => month.key)).map((row, index) => ({
     ...row,
     label: months[index].label,
-    costs: records.maintenance.filter(item => item.date && monthKey(item.date) === row.month).reduce((sum, item) => sum + (item.cost ?? 0), 0),
+    costs: records.maintenance.filter(item => item.date && monthKey(item.date) === row.month && !filters.tenant && matches(item, filters)).reduce((sum, item) => sum + (item.cost ?? 0), 0),
   }))
   const peak = Math.max(1, ...chart.flatMap(row => [row.invoiced, row.received, row.costs]))
   const buckets = aging(scopedViews)
@@ -398,9 +401,13 @@ export function FinanceModule({ focusInvoiceId, onFocusHandled }: { focusInvoice
     .filter(payment => !linkFilter || (linkFilter === 'los' ? !payment.invoiceId : Boolean(payment.invoiceId)))
     .filter(payment => !needle || `${payment.reference ?? ''} ${payment.tenant ?? ''} ${payment.property ?? ''} ${invoiceNumber(payment.invoiceId) ?? ''}`.toLowerCase().includes(needle))
     .sort((a, b) => b.receivedOn.localeCompare(a.receivedOn))
+  const resetKey = `${tab}|${query}|${stateFilter}|${methodFilter}|${linkFilter}|${filters.period}|${filters.from}|${filters.to}|${filters.tenant}|${filters.property}`
+  const invoicePager = usePagination(invoiceRows, user.settings.pageSize, resetKey)
+  const paymentPager = usePagination(paymentRows, user.settings.pageSize, resetKey)
   const unlinked = records.payments.filter(payment => !payment.invoiceId).length
 
   const generateRent = async () => {
+    if (busy) return
     setBusy(true)
     const month = monthKey(now)
     const label = new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric' }).format(new Date())
@@ -516,8 +523,8 @@ export function FinanceModule({ focusInvoiceId, onFocusHandled }: { focusInvoice
               </ul>
             </div>
           </div>
-          <GroupTable title="Per huurder" subtitle="Klik op een huurder om de facturen te zien" rows={groupBy(scopedViews, scopedPayments.filter(payment => inRange(payment.receivedOn)), tenantKey)} onPick={pick('tenant')} />
-          <GroupTable title="Per woning" subtitle="Klik op een woning om de facturen te zien" rows={groupBy(scopedViews, scopedPayments.filter(payment => inRange(payment.receivedOn)), propertyKey)} onPick={pick('property')} />
+          <GroupTable title="Per huurder" subtitle="Klik op een huurder om de facturen te zien" rows={groupBy(scopedViews, scopedPayments.filter(payment => inRange(payment.receivedOn)), tenantKey, view => inRange(view.issueDate))} onPick={pick('tenant')} />
+          <GroupTable title="Per woning" subtitle="Klik op een woning om de facturen te zien" rows={groupBy(scopedViews, scopedPayments.filter(payment => inRange(payment.receivedOn)), propertyKey, view => inRange(view.issueDate))} onPick={pick('property')} />
         </div>
       ) : tab === 'facturen' ? (
         <div className="panel">
@@ -534,13 +541,13 @@ export function FinanceModule({ focusInvoiceId, onFocusHandled }: { focusInvoice
             ])}><Icon name="download" size={15} /> Exporteren</button>
           </div>
           {records.invoices.length === 0 ? (
-            <EmptyState icon="file" title="Nog geen facturen" text="Maak een factuur aan, of factureer met één klik de huur voor alle actieve contracten." action={<button type="button" className="button" onClick={generateRent}>Huur deze maand factureren</button>} />
+            <EmptyState icon="file" title="Nog geen facturen" text="Maak een factuur aan, of factureer met één klik de huur voor alle actieve contracten." action={<button type="button" className="button" disabled={busy} onClick={generateRent}>Huur deze maand factureren</button>} />
           ) : invoiceRows.length === 0 ? <EmptyState icon="search" title="Geen facturen" text="Pas de filters aan." /> : (
             <div className="table-scroll">
               <table className="clickable-rows">
                 <thead><tr><th>Nummer</th><th>Huurder</th><th>Woning</th><th>Omschrijving</th><th>Vervaldatum</th><th className="right">Bedrag</th><th className="right">Openstaand</th><th>Status</th><th /></tr></thead>
                 <tbody>
-                  {invoiceRows.map(view => (
+                  {invoicePager.slice.map(view => (
                     <tr key={view.id} onClick={() => setDetailId(view.id)}>
                       <td><button type="button" className="link-button strong" onClick={event => { event.stopPropagation(); setDetailId(view.id) }}>{view.number}</button></td>
                       <td>{view.tenant || '—'}</td>
@@ -559,6 +566,7 @@ export function FinanceModule({ focusInvoiceId, onFocusHandled }: { focusInvoice
               </table>
             </div>
           )}
+          {invoiceRows.length > 0 && <Pagination pager={invoicePager} noun="facturen" />}
         </div>
       ) : (
         <div className="panel">
@@ -585,7 +593,7 @@ export function FinanceModule({ focusInvoiceId, onFocusHandled }: { focusInvoice
               <table>
                 <thead><tr><th>Ontvangen op</th><th>Huurder</th><th>Woning</th><th>Factuur</th><th>Methode</th><th>Referentie</th><th className="right">Bedrag</th><th /></tr></thead>
                 <tbody>
-                  {paymentRows.map(payment => (
+                  {paymentPager.slice.map(payment => (
                     <tr key={payment.id}>
                       <td>{formatDate(payment.receivedOn)}</td>
                       <td>{payment.tenant || '—'}</td>
@@ -601,6 +609,7 @@ export function FinanceModule({ focusInvoiceId, onFocusHandled }: { focusInvoice
               </table>
             </div>
           )}
+          {paymentRows.length > 0 && <Pagination pager={paymentPager} noun="betalingen" />}
         </div>
       )}
 

@@ -19,6 +19,7 @@ type AppContextValue = {
   confirm: (message: string, confirmLabel?: string) => Promise<boolean>
   saveProperty: (input: Partial<Property>, id?: number) => Promise<Property | null>
   removeProperty: (id: number) => Promise<boolean>
+  importProperties: (rows: Record<string, string | number>[]) => Promise<{ created: number; skipped: number; errors: { line: number; message: string }[] } | null>
   saveRecord: <K extends RecordKind>(kind: K, data: Record<string, unknown>, id?: number) => Promise<RecordMap[K][number] | null>
   removeRecord: (kind: RecordKind, id: number) => Promise<boolean>
   updateAccount: (patch: ProfilePatch) => Promise<string | null>
@@ -33,6 +34,9 @@ export function useApp() {
   if (!value) throw new Error('useApp moet binnen AppProvider worden gebruikt.')
   return value
 }
+
+/** Houdt het overzicht licht: foto's worden los geladen (zie /api/properties/[id]/image/[index]). */
+const slim = (property: Property): Property => ({ ...property, image: undefined, images: undefined, imageCount: property.images?.length ?? (property.image ? 1 : 0), imageVersion: Date.now() })
 
 export const THEME_KEY = 'puntiq-theme'
 
@@ -72,6 +76,7 @@ export function AppProvider({ initialUser, children }: { initialUser: User; chil
   const [toasts, setToasts] = useState<Toast[]>([])
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const toastId = useRef(0)
+  const notifyRef = useRef<(message: string, tone?: 'ok' | 'error') => void>(() => undefined)
 
   useEffect(() => {
     applyPreferences(user.settings)
@@ -89,6 +94,8 @@ export function AppProvider({ initialUser, children }: { initialUser: User; chil
       if (props.data?.properties) setProperties(props.data.properties)
       if (recs.data) setRecords({ ...emptyRecords, ...recs.data })
       setLoading(false)
+      // Zonder melding zou een mislukte load eruitzien als een lege portefeuille.
+      if (!props.ok || !recs.ok) notifyRef.current('Gegevens konden niet (volledig) worden geladen. Ververs de pagina voordat u iets wijzigt.', 'error')
     })
     return () => {
       cancelled = true
@@ -101,10 +108,30 @@ export function AppProvider({ initialUser, children }: { initialUser: User; chil
     window.setTimeout(() => setToasts(current => current.filter(toast => toast.id !== id)), tone === 'error' ? 5000 : 3000)
   }, [])
 
+  useEffect(() => {
+    notifyRef.current = notify
+  }, [notify])
+
   const confirm = useCallback(
-    (message: string, confirmLabel = 'Verwijderen') => new Promise<boolean>(resolve => setConfirmState({ message, confirmLabel, resolve })),
+    (message: string, confirmLabel = 'Verwijderen') => new Promise<boolean>(resolve => setConfirmState(previous => {
+      previous?.resolve(false) // een eerdere, nog openstaande vraag blijft niet eeuwig hangen
+      return { message, confirmLabel, resolve }
+    })),
     [],
   )
+
+  // Escape sluit de bevestiging, niet ook het modal eronder.
+  useEffect(() => {
+    if (!confirmState) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      confirmState.resolve(false)
+      setConfirmState(null)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [confirmState])
 
   const saveProperty = useCallback(async (input: Partial<Property>, id?: number) => {
     const result = await request<{ property: Property }>(id ? `/api/properties/${id}` : '/api/properties', { method: id ? 'PUT' : 'POST', body: JSON.stringify(input) })
@@ -112,7 +139,7 @@ export function AppProvider({ initialUser, children }: { initialUser: User; chil
       notify(result.error ?? 'Woning kon niet worden opgeslagen.', 'error')
       return null
     }
-    const saved = result.data.property
+    const saved = slim(result.data.property)
     setProperties(current => (id ? current.map(item => (item.id === id ? saved : item)) : [saved, ...current]))
     return saved
   }, [notify])
@@ -125,6 +152,17 @@ export function AppProvider({ initialUser, children }: { initialUser: User; chil
     }
     setProperties(current => current.filter(item => item.id !== id))
     return true
+  }, [notify])
+
+  const importProperties = useCallback(async (rows: Record<string, string | number>[]) => {
+    const result = await request<{ created: Property[]; skipped: number; errors: { line: number; message: string }[] }>('/api/properties/import', { method: 'POST', body: JSON.stringify({ rows }) })
+    if (!result.ok || !result.data) {
+      notify(result.error ?? 'Importeren is mislukt.', 'error')
+      return null
+    }
+    const { created, skipped, errors } = result.data
+    setProperties(current => [...created.map(slim), ...current])
+    return { created: created.length, skipped, errors }
   }, [notify])
 
   const saveRecord = useCallback(async <K extends RecordKind>(kind: K, data: Record<string, unknown>, id?: number) => {
@@ -163,9 +201,27 @@ export function AppProvider({ initialUser, children }: { initialUser: User; chil
     window.location.href = '/login'
   }, [])
 
+  // Automatisch uitloggen na inactiviteit (instelbaar onder Wachtwoord & beveiliging).
+  const idleMinutes = user.settings.idleLogoutMinutes
+  useEffect(() => {
+    if (!idleMinutes) return
+    let timer = 0
+    const reset = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => { void logout(false) }, idleMinutes * 60_000)
+    }
+    const events = ['pointerdown', 'keydown', 'scroll', 'visibilitychange'] as const
+    events.forEach(name => window.addEventListener(name, reset, { passive: true }))
+    reset()
+    return () => {
+      window.clearTimeout(timer)
+      events.forEach(name => window.removeEventListener(name, reset))
+    }
+  }, [idleMinutes, logout])
+
   const value = useMemo<AppContextValue>(
-    () => ({ user, draftUsername, setDraftUsername, loading, properties, records, notify, confirm, saveProperty, removeProperty, saveRecord, removeRecord, updateAccount, logout }),
-    [user, draftUsername, loading, properties, records, notify, confirm, saveProperty, removeProperty, saveRecord, removeRecord, updateAccount, logout],
+    () => ({ user, draftUsername, setDraftUsername, loading, properties, records, notify, confirm, saveProperty, removeProperty, importProperties, saveRecord, removeRecord, updateAccount, logout }),
+    [user, draftUsername, loading, properties, records, notify, confirm, saveProperty, removeProperty, importProperties, saveRecord, removeRecord, updateAccount, logout],
   )
 
   const answer = (result: boolean) => {
@@ -176,7 +232,7 @@ export function AppProvider({ initialUser, children }: { initialUser: User; chil
   return (
     <AppContext.Provider value={value}>
       {children}
-      <div className="toasts" role="status" aria-live="polite">
+      <div className="toasts" role="status" aria-live="polite" aria-atomic="false">
         {toasts.map(toast => (
           <div key={toast.id} className={`toast ${toast.tone}`}>{toast.tone === 'ok' ? '✓' : '!'} {toast.message}</div>
         ))}

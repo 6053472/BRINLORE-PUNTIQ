@@ -42,7 +42,7 @@ export function berekenWwso(invoer: WwsoInvoer, regelset: WwsoRegelset): WwsoUit
   const r = regelset
   const redenen: string[] = []
   const stap = r.afrondingRubriek.stap
-  const afronden = (value: number) => (stap ? Math.round(value / stap) * stap : value)
+  const afronden = (value: number) => (stap ? Math.round(value / stap) * stap : value) + 0 // + 0 voorkomt -0
 
   const rubriek = (id: RubriekId, herkomst: Herkomst, bereken: () => Berekening, standaardNul = false): RubriekUitkomst => {
     const [nummer, naam] = namen[id]

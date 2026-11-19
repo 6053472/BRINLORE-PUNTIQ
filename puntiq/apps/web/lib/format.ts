@@ -3,8 +3,8 @@ export const money = (n: number) =>
 
 export const moneyShort = (n: number) =>
   n >= 1_000_000
-    ? `€ ${(n / 1_000_000).toFixed(1).replace('.', ',')}M`
-    : n >= 10_000
+    || Math.round(n / 1000) >= 1000 ? `€ ${(n / 1_000_000).toFixed(1).replace('.', ',')}M`
+    : n >= 10_000 && Math.round(n / 1000) < 1000
       ? `€ ${Math.round(n / 1000)}k`
       : money(n)
 
@@ -17,6 +17,16 @@ export const today = () => toIso(new Date())
 export function addDays(iso: string, days: number) {
   const date = new Date(`${iso}T00:00:00`)
   date.setDate(date.getDate() + days)
+  return toIso(date)
+}
+
+export function addMonths(iso: string, months: number) {
+  const date = new Date(`${iso}T00:00:00`)
+  const day = date.getDate()
+  date.setDate(1)
+  date.setMonth(date.getMonth() + months)
+  // Einde van de maand afvangen (31 jan + 1 maand = 28/29 feb).
+  date.setDate(Math.min(day, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()))
   return toIso(date)
 }
 
@@ -59,11 +69,13 @@ export function longDate(date = new Date()) {
 export const monthLabel = (date: Date) => new Intl.DateTimeFormat('nl-NL', { month: 'short' }).format(date).replace('.', '')
 export const monthKey = (iso: string) => iso.slice(0, 7)
 
-export const slug = (value: string) => value.replaceAll(' ', '-').toLowerCase()
+export const slug = (value: string) => [...value.normalize('NFD')].filter(char => char.charCodeAt(0) < 128).join('').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
 export function downloadCsv(filename: string, rows: (string | number | undefined | null)[][]) {
   const escape = (cell: string | number | undefined | null) => {
-    const text = cell == null ? '' : String(cell)
+    // Getallen met decimale komma (Excel nl-NL); tekst die met = + - @ begint krijgt een apostrof (formule-injectie).
+    let text = cell == null ? '' : typeof cell === 'number' ? String(cell).replace('.', ',') : String(cell)
+    if (typeof cell === 'string' && (/^[-=+@]/.test(text) || text.startsWith(String.fromCharCode(9)) || text.startsWith(String.fromCharCode(13)))) text = `'${text}`
     return /[";\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
   }
   // Puntkomma + BOM zodat Excel (nl-NL) het bestand direct goed opent.
@@ -72,8 +84,10 @@ export function downloadCsv(filename: string, rows: (string | number | undefined
   const link = document.createElement('a')
   link.href = url
   link.download = filename
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /** Verkleint een afbeelding client-side zodat uploads klein blijven. */

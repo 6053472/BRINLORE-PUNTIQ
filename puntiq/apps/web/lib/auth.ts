@@ -29,9 +29,12 @@ const attempts = new Map<string, { count: number; first: number }>()
 const WINDOW_MS = 10 * 60 * 1000
 const MAX_ATTEMPTS = 8
 
-export function clientKey(request: Request, name: string) {
-  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  return `${forwarded || 'local'}:${name.toLowerCase()}`
+/**
+ * Sleutel voor de limiet: de gebruikersnaam. Een IP uit x-forwarded-for is door de client te kiezen en
+ * zou de limiet omzeilbaar maken, dus dat wordt bewust niet gebruikt.
+ */
+export function clientKey(_request: Request, name: string) {
+  return `u:${name.trim().toLowerCase().slice(0, 64)}`
 }
 
 export function isRateLimited(key: string) {
@@ -45,6 +48,8 @@ export function isRateLimited(key: string) {
 }
 
 export function recordFailure(key: string) {
+  // Voorkomt dat de Map onbeperkt groeit bij veel verschillende namen.
+  if (attempts.size > 5000) for (const [name, entry] of attempts) if (Date.now() - entry.first > WINDOW_MS) attempts.delete(name)
   const entry = attempts.get(key)
   if (!entry || Date.now() - entry.first > WINDOW_MS) attempts.set(key, { count: 1, first: Date.now() })
   else entry.count += 1

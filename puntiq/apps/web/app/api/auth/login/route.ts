@@ -7,8 +7,8 @@ export const runtime = 'nodejs'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
-  const username = typeof body?.username === 'string' ? body.username.trim() : ''
-  const password = typeof body?.password === 'string' ? body.password : ''
+  const username = typeof body?.username === 'string' ? body.username.trim().slice(0, 64) : ''
+  const password = typeof body?.password === 'string' ? body.password.slice(0, 256) : ''
   const asAdmin = body?.admin === true
   const key = clientKey(request, username)
   if (isRateLimited(key)) return json({ error: 'Te veel mislukte pogingen. Probeer het over een paar minuten opnieuw.' }, 429)

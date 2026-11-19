@@ -131,10 +131,10 @@ function UserModal({ user, self, onClose, onChanged }: { user: AdminUser; self: 
       </dl>
       {self && <p className="muted">Dit is uw eigen account: rol wijzigen, blokkeren en verwijderen is uitgeschakeld.</p>}
       <SettingRow title="Beheerdersrechten" hint="Beheerders hebben toegang tot alle beheerpagina's.">
-        <Toggle label="Beheerder" on={user.role === 'admin'} onChange={value => !self && !busy && act({ role: value ? 'admin' : 'user' }, value ? 'Gebruiker is nu beheerder' : 'Beheerdersrechten ingetrokken')} />
+        <Toggle label="Beheerder" disabled={self || busy} on={user.role === 'admin'} onChange={value => !self && !busy && act({ role: value ? 'admin' : 'user' }, value ? 'Gebruiker is nu beheerder' : 'Beheerdersrechten ingetrokken')} />
       </SettingRow>
       <SettingRow title="Account geblokkeerd" hint="Geblokkeerde gebruikers kunnen niet meer inloggen en worden direct uitgelogd.">
-        <Toggle label="Geblokkeerd" on={user.disabled} onChange={value => !self && !busy && act({ disabled: value }, value ? 'Account geblokkeerd' : 'Account gedeblokkeerd')} />
+        <Toggle label="Geblokkeerd" disabled={self || busy} on={user.disabled} onChange={value => !self && !busy && act({ disabled: value }, value ? 'Account geblokkeerd' : 'Account gedeblokkeerd')} />
       </SettingRow>
       {tempPassword && (
         <div className="temp-password" role="status">
@@ -254,11 +254,11 @@ type AuditEntry = { id: number; at: string; actor: string; action: string; targe
 
 const actionLabels: Record<string, string> = {
   login: 'Ingelogd', 'login.admin': 'Ingelogd als beheerder', 'login.failed': 'Mislukte login', 'login.blocked': 'Login geblokkeerd', 'login.denied': 'Beheerderslogin geweigerd',
-  'user.register': 'Geregistreerd', 'user.password': 'Wachtwoord gewijzigd', 'user.self-delete': 'Account verwijderd',
+  'user.register': 'Geregistreerd', 'user.password': 'Wachtwoord gewijzigd', 'user.password-failed': 'Wachtwoord wijzigen mislukt', 'user.self-delete': 'Account verwijderd',
   'admin.user.create': 'Gebruiker aangemaakt', 'admin.user.role': 'Rol gewijzigd', 'admin.user.block': 'Gebruiker geblokkeerd', 'admin.user.unblock': 'Gebruiker gedeblokkeerd',
   'admin.user.reset-password': 'Wachtwoord gereset', 'admin.user.logout': 'Gebruiker uitgelogd', 'admin.user.delete': 'Gebruiker verwijderd', 'admin.site': 'Site-instellingen gewijzigd',
 }
-const tone = (action: string) => (/failed|denied|blocked|block$|delete/.test(action) ? 'bad' : action.startsWith('admin.') ? 'warn' : 'neutral')
+const tone = (action: string) => (/failed|denied|blocked|\.block$|delete/.test(action) ? 'bad' : action.startsWith('admin.') ? 'warn' : 'neutral')
 
 export function AuditAdmin() {
   const { data, error, loading, reload } = useAdminData<{ entries: AuditEntry[] }>('/api/admin/audit')
@@ -312,9 +312,13 @@ export function SiteAdmin() {
 
   const save = async (patch: Partial<Site>, message = 'Instellingen opgeslagen') => {
     const result = await api<{ site: Site }>('/api/admin/site', { method: 'PUT', body: JSON.stringify(patch) })
-    if (!result.ok || !result.data) return notify(result.error ?? 'Opslaan mislukt.', 'error')
+    if (!result.ok || !result.data) {
+      notify(result.error ?? 'Opslaan mislukt.', 'error')
+      return false
+    }
     setSite(result.data.site)
     notify(message)
+    return true
   }
 
   const toggleMaintenance = async (value: boolean) => {
@@ -343,7 +347,7 @@ export function SiteAdmin() {
             <label>Bericht tijdens onderhoud
               <input value={maintenanceMessage ?? current.maintenanceMessage} onChange={event => setMaintenanceMessage(event.target.value)} maxLength={300} placeholder="bijv. We zijn om 14:00 weer beschikbaar." />
             </label>
-            <div className="form-actions"><button type="button" className="button small" disabled={maintenanceMessage === null} onClick={() => save({ maintenanceMessage: maintenanceMessage ?? '' }).then(() => setMaintenanceMessage(null))}>Bericht opslaan</button></div>
+            <div className="form-actions"><button type="button" className="button small" disabled={maintenanceMessage === null} onClick={() => save({ maintenanceMessage: maintenanceMessage ?? '' }).then(saved => { if (saved) setMaintenanceMessage(null) })}>Bericht opslaan</button></div>
           </section>
           <section className="panel card">
             <div className="card-head"><span className="card-icon"><Icon name="bell" size={19} /></span><div><h2>Aankondiging</h2><p className="muted">Wordt als balk bovenaan getoond aan alle ingelogde gebruikers.</p></div></div>
@@ -354,8 +358,8 @@ export function SiteAdmin() {
               <select value={current.announcementTone} onChange={event => save({ announcementTone: event.target.value as Site['announcementTone'] })}><option value="info">Informatie</option><option value="warning">Waarschuwing</option></select>
             </SettingRow>
             <div className="form-actions">
-              {current.announcement && <button type="button" className="button ghost small" onClick={() => save({ announcement: '' }, 'Aankondiging verwijderd').then(() => setAnnouncement(null))}>Verwijderen</button>}
-              <button type="button" className="button small" disabled={announcement === null} onClick={() => save({ announcement: announcement ?? '' }, 'Aankondiging gepubliceerd').then(() => setAnnouncement(null))}>Publiceren</button>
+              {current.announcement && <button type="button" className="button ghost small" onClick={() => save({ announcement: '' }, 'Aankondiging verwijderd').then(saved => { if (saved) setAnnouncement(null) })}>Verwijderen</button>}
+              <button type="button" className="button small" disabled={announcement === null} onClick={() => save({ announcement: announcement ?? '' }, 'Aankondiging gepubliceerd').then(saved => { if (saved) setAnnouncement(null) })}>Publiceren</button>
             </div>
           </section>
         </div>

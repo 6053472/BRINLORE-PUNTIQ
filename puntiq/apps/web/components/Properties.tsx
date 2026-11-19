@@ -1,15 +1,40 @@
 'use client'
 
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
-import { EmptyState, Modal, PageHead, Status } from './ui'
+import { EmptyState, Modal, PageHead, Pagination, Status, usePagination } from './ui'
+import { ImportModal } from './PropertyImport'
 import { berekenWws, energielabels, kiesRegelset, legeInvoer, nieuweRuimte, type Betrouwbaarheid, type Energielabel, type WwsInvoer } from '../lib/wws'
 import { BetrouwbaarheidBadge } from './Wws'
 import { downloadCsv, money, resizeImage, today } from '../lib/format'
 import type { Property } from '../lib/types'
 
 export const propertyImages = (property: Property) => (property.images?.length ? property.images : property.image ? [property.image] : [])
+
+/** Kleine voorbeeldafbeelding voor lijsten: een echte URL die de browser kan cachen en lui laden. */
+export const propertyThumb = (property: Property) => propertyImages(property)[0] ?? (property.imageCount ? `/api/properties/${property.id}/image/0${property.imageVersion ? `?v=${property.imageVersion}` : ''}` : undefined)
+
+/** Laadt de foto's van één woning wanneer ze nodig zijn (detail of bewerken). */
+function usePropertyImages(property?: Property) {
+  const id = property?.id
+  const loaded = property ? propertyImages(property) : []
+  const needsFetch = id !== undefined && loaded.length === 0 && (property?.imageCount ?? 0) > 0
+  const [fetched, setFetched] = useState<{ id: number; images: string[] } | null>(null)
+  const [failed, setFailed] = useState<number | null>(null)
+  useEffect(() => {
+    if (!needsFetch || id === undefined) return
+    let cancelled = false
+    fetch(`/api/properties/${id}`)
+      .then(response => (response.ok ? response.json() : Promise.reject(new Error('mislukt'))))
+      .then((data: { property: Property }) => !cancelled && setFetched({ id, images: propertyImages(data.property) }))
+      .catch(() => !cancelled && setFailed(id))
+    return () => { cancelled = true }
+  }, [id, needsFetch])
+  if (!needsFetch) return { images: loaded, ready: true, failed: false }
+  const done = fetched?.id === id
+  return { images: done ? fetched.images : [], ready: done, failed: failed === id }
+}
 export const propertyStatuses = ['Beschikbaar', 'Verhuurd', 'In onderhoud']
 
 type Estimate = { points: number; rent: number; price: number; reliability: Betrouwbaarheid | null; missing: string[] }
@@ -20,7 +45,8 @@ function estimate(data: FormData): Estimate {
   const area = Number(data.get('area')) || 0
   const type = String(data.get('type'))
   const regelset = kiesRegelset(today())
-  if (!area || type === 'Bedrijfsruimte' || !regelset) return emptyEstimate
+  // Onzelfstandige woonruimte valt onder de WWSO-module; bedrijfsruimte heeft geen woningwaardering.
+  if (!area || type === 'Bedrijfsruimte' || type === 'Onzelfstandig' || !regelset) return emptyEstimate
   const heated = Math.max(0, Number(data.get('heatingRooms')) || 0)
   const heatedOther = Math.max(0, Number(data.get('heatingOtherRooms')) || 0)
   const label = String(data.get('energyLabel') || '')
@@ -40,13 +66,18 @@ function estimate(data: FormData): Estimate {
   const result = berekenWws(invoer, regelset)
   const missing = result.rubrieken.filter(item => item.punten === null).map(item => item.naam.toLowerCase())
   if (result.totaalPunten === null) return { ...emptyEstimate, reliability: result.betrouwbaarheid, missing }
-  const rent = result.maximaleHuur ?? result.tabelHuur ?? 0
+  // Vrije sector (geen maximale huur): geen huursuggestie.
+  if (result.maximaleHuur === null) return { ...emptyEstimate, reliability: result.betrouwbaarheid, missing: ['(vrije sector: geen maximale huur)'] }
+  const rent = result.maximaleHuur
   return { points: result.totaalPunten, rent, price: Math.round((rent * 12) / 0.045 / 1000) * 1000, reliability: result.betrouwbaarheid, missing }
 }
 
 export function PropertyModal({ property, onClose }: { property?: Property; onClose: () => void }) {
   const { saveProperty, notify } = useApp()
-  const [images, setImages] = useState<string[]>(propertyImages(property ?? ({} as Property)))
+  const { images: loadedImages, ready: imagesReady, failed: imagesFailed } = usePropertyImages(property)
+  const [edited, setEdited] = useState<string[] | null>(null)
+  const images = edited ?? loadedImages
+  const setImages = (update: (current: string[]) => string[]) => setEdited(previous => update(previous ?? loadedImages))
   const [suggestion, setSuggestion] = useState<Estimate>(emptyEstimate)
   const [rent, setRent] = useState(property?.rent ? String(property.rent) : '')
   const [price, setPrice] = useState(property?.price ? String(property.price) : '')
@@ -84,7 +115,7 @@ export function PropertyModal({ property, onClose }: { property?: Property; onCl
         image: images[0] ?? '',
         area: Number(d.get('area')) || undefined,
         rooms: Number(d.get('rooms')) || undefined,
-        bedrooms: Number(d.get('bedrooms')) || undefined,
+        bedrooms: d.get('bedrooms') === '' ? undefined : Number(d.get('bedrooms')),
         yearBuilt: Number(d.get('yearBuilt')) || undefined,
         energyLabel: String(d.get('energyLabel') || ''),
         floor: String(d.get('floor') || ''),
@@ -109,7 +140,8 @@ export function PropertyModal({ property, onClose }: { property?: Property; onCl
       actions={
         <>
           <button type="button" className="button ghost" onClick={onClose}>Annuleren</button>
-          <button className="button" disabled={busy}>{busy ? 'Bezig…' : property ? 'Opslaan' : 'Woning toevoegen'}</button>
+          {imagesFailed && <span className="form-error">De foto’s konden niet worden geladen; opslaan is uitgeschakeld om ze niet te verliezen.</span>}
+          <button className="button" disabled={busy || !imagesReady}>{busy ? 'Bezig…' : !imagesReady && !imagesFailed ? 'Foto’s laden…' : property ? 'Opslaan' : 'Woning toevoegen'}</button>
         </>
       }
     >
@@ -120,7 +152,7 @@ export function PropertyModal({ property, onClose }: { property?: Property; onCl
             <Icon name="image" size={22} />
             <strong>{images.length ? 'Meer foto’s toevoegen' : 'Foto’s toevoegen'}</strong>
             <small>JPG, PNG of WEBP · automatisch verkleind</small>
-            <input type="file" accept="image/*" multiple onChange={chooseImages} hidden />
+            <input type="file" accept="image/*" multiple onChange={chooseImages} className="sr" disabled={!imagesReady} />
           </label>
           {images.length > 0 && (
             <div className="property-upload-thumbnails">
@@ -209,7 +241,7 @@ function PropertyFields({ property, onChange, rent, price, setRent, setPrice, se
 
 export function PropertyDetail({ property, onClose, onEdit }: { property: Property; onClose: () => void; onEdit: () => void }) {
   const { records, saveProperty, removeProperty, confirm, notify } = useApp()
-  const images = propertyImages(property)
+  const { images } = usePropertyImages(property)
   const [active, setActive] = useState(0)
   const [touch, setTouch] = useState<number | null>(null)
   const step = (direction: number) => images.length > 1 && setActive(current => (current + direction + images.length) % images.length)
@@ -285,18 +317,21 @@ export function PropertyDetail({ property, onClose, onEdit }: { property: Proper
 }
 
 export function PropertiesModule({ onSelect, onAdd }: { onSelect: (property: Property) => void; onAdd: () => void }) {
-  const { properties, loading } = useApp()
+  const { user, properties, loading } = useApp()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('')
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useState<'grid' | 'table'>(user.settings.propertyView)
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return properties.filter(property => (!status || property.status === status) && (!needle || `${property.name} ${property.address} ${property.type} ${property.description ?? ''}`.toLowerCase().includes(needle)))
   }, [properties, query, status])
+  const [importing, setImporting] = useState(false)
+  const pager = usePagination(visible, view === 'grid' ? Math.round(user.settings.pageSize / 12) * 12 || 24 : user.settings.pageSize,`${query}|${status}|${view}`)
 
   return (
     <>
       <PageHead eyebrow="VASTGOED" title="Vastgoed" description="Beheer en organiseer uw volledige vastgoedportefeuille.">
+        <button type="button" className="button ghost" onClick={() => setImporting(true)}><Icon name="upload" size={16} /> Importeren (CSV)</button>
         <button type="button" className="button" onClick={onAdd}><Icon name="plus" size={16} /> Nieuwe woning</button>
       </PageHead>
       <div className="panel">
@@ -317,8 +352,10 @@ export function PropertiesModule({ onSelect, onAdd }: { onSelect: (property: Pro
         {loading ? <p className="muted pad">Laden…</p> : properties.length === 0 ? (
           <EmptyState icon="building" title="Uw portefeuille is nog leeg" text="Voeg uw eerste woning toe om te beginnen met beheren." action={<button type="button" className="button" onClick={onAdd}><Icon name="plus" size={16} /> Nieuwe woning</button>} />
         ) : visible.length === 0 ? <EmptyState icon="search" title="Geen resultaten" text="Pas uw zoekopdracht of filter aan." />
-        : view === 'grid' ? <PropertyGrid properties={visible} onSelect={onSelect} /> : <PropertyTable properties={visible} onSelect={onSelect} />}
+        : view === 'grid' ? <PropertyGrid properties={pager.slice} onSelect={onSelect} /> : <PropertyTable properties={pager.slice} onSelect={onSelect} />}
+        {!loading && visible.length > 0 && <Pagination pager={pager} noun="woningen" />}
       </div>
+      {importing && <ImportModal onClose={() => setImporting(false)} />}
     </>
   )
 }
@@ -327,7 +364,7 @@ export function PropertyGrid({ properties, onSelect }: { properties: Property[];
   return (
     <div className="property-grid">
       {properties.map(property => {
-        const image = propertyImages(property)[0]
+        const image = propertyThumb(property)
         return (
           <button type="button" className="property-card" key={property.id} onClick={() => onSelect(property)}>
             <div className="property-card-image">

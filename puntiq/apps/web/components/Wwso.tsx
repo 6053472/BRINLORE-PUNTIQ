@@ -3,7 +3,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useApp } from './AppProvider'
 import { Icon } from './icons'
-import { EmptyState, Modal, PageHead, PanelHeading, Stat } from './ui'
+import { EmptyState, Modal, PageHead, PanelHeading, Pagination, Stat, usePagination } from './ui'
+import { RecheckModal } from './Recheck'
+import { controleerWwsoBerekening } from '../lib/recheck'
 import {
   berekenWwso, controleerWwsoRegelset, energielabels, kiesWwsoRegelset, legeWwsoInvoer, nieuwId,
   type Betrouwbaarheid, type ComplexRuimte, type Energielabel, type GedeeldeRuimte, type PriveRuimte, type RegelStatus, type RubriekId, type Voorziening, type WwsoInvoer, type WwsoUitkomst,
@@ -27,7 +29,7 @@ const Badge = ({ value }: { value: Betrouwbaarheid }) => <span className={badge[
 /* ---------- Generieke invoer ---------- */
 
 function Num({ value, onChange, step = 1, min = 0, label, placeholder }: { value: number | null; onChange: (value: number | null) => void; step?: number; min?: number; label?: string; placeholder?: string }) {
-  return <input type="number" inputMode="decimal" min={min} step={step} value={value ?? ''} aria-label={label} placeholder={placeholder} onChange={event => onChange(event.target.value === '' ? null : Math.max(min, Number(event.target.value)))} />
+  return <input type="number" inputMode="decimal" min={min} step={step} value={value ?? ''} aria-label={label} placeholder={placeholder} onChange={event => onChange(event.target.value === '' ? null : Number(event.target.value))} onBlur={() => { if (value !== null && value < min) onChange(min) }} />
 }
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
@@ -345,6 +347,9 @@ function RegelsetStatus() {
 export function WwsoModule({ onCalculate, onOpen }: { onCalculate: () => void; onOpen: (record: WwsoCalculation) => void }) {
   const { records, removeRecord, confirm, notify } = useApp()
   const lijst = records.wwso
+  const [controleren, setControleren] = useState(false)
+  const pager = usePagination(lijst, 25)
+  const controleRijen = useMemo(() => (controleren ? lijst.map(item => ({ id: item.id, label: item.label, date: item.date, points: item.points, rent: item.rent, controle: controleerWwsoBerekening(item) })) : []), [controleren, lijst])
   const scored = lijst.filter(item => item.points !== undefined && item.points !== null)
   const average = scored.length ? Math.round(scored.reduce((sum, item) => sum + (item.points ?? 0), 0) / scored.length) : 0
   const remove = async (id: number) => {
@@ -354,6 +359,7 @@ export function WwsoModule({ onCalculate, onOpen }: { onCalculate: () => void; o
   return (
     <>
       <PageHead eyebrow="WWSO" title="Kamers waarderen" description="Puntentelling voor onzelfstandige woonruimte, inclusief gedeelde ruimten en voorzieningen. Los van de WWS-berekening voor zelfstandige woningen.">
+        <button type="button" className="button ghost" disabled={!lijst.length} onClick={() => setControleren(true)}><Icon name="check" size={16} /> Berekeningen controleren</button>
         <button type="button" className="button" onClick={onCalculate}><Icon name="calc" size={16} /> Kamer waarderen</button>
       </PageHead>
       <div className="stats-grid">
@@ -372,7 +378,7 @@ export function WwsoModule({ onCalculate, onOpen }: { onCalculate: () => void; o
             <table>
               <thead><tr><th>Kamer</th><th>Pand</th><th>Peildatum</th><th>Punten</th><th>Uitkomst</th><th className="right">Max. huur</th><th /></tr></thead>
               <tbody>
-                {lijst.map(item => (
+                {pager.slice.map(item => (
                   <tr key={item.id}>
                     <td><button type="button" className="link-button strong" onClick={() => onOpen(item)}>{item.label}</button></td>
                     <td>{item.property || '—'}</td>
@@ -387,7 +393,16 @@ export function WwsoModule({ onCalculate, onOpen }: { onCalculate: () => void; o
             </table>
           </div>
         )}
+        {lijst.length > 0 && <Pagination pager={pager} noun="kamers" />}
       </div>
+      {controleren && (
+        <RecheckModal
+          title="WWSO-berekeningen controleren"
+          rows={controleRijen}
+          onOpen={id => { const item = lijst.find(entry => entry.id === id); if (item) { setControleren(false); onOpen(item) } }}
+          onClose={() => setControleren(false)}
+        />
+      )}
     </>
   )
 }

@@ -14,9 +14,11 @@ function secret() {
   if (cachedSecret) return cachedSecret
   if (process.env.PUNTIQ_SESSION_SECRET) return (cachedSecret = process.env.PUNTIQ_SESSION_SECRET)
   const file = path.join(dataDirectory, '.session-secret')
-  if (existsSync(file)) {
-    cachedSecret = readFileSync(file, 'utf8').trim()
+  const stored = existsSync(file) ? readFileSync(file, 'utf8').trim() : ''
+  if (stored.length >= 32) {
+    cachedSecret = stored
   } else {
+    // Ontbrekend of afgekapt geheim (lege sleutel zou vervalsbare sessies geven): opnieuw genereren.
     cachedSecret = randomBytes(48).toString('hex')
     writeFileSync(file, cachedSecret, { encoding: 'utf8', mode: 0o600 })
   }

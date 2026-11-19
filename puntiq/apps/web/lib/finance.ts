@@ -72,8 +72,11 @@ export function totals(views: InvoiceView[], payments: Payment[], period?: { fro
 
 export type GroupRow = { key: string; label: string; invoiced: number; received: number; open: number; overdue: number; overdueCount: number; oldestDue?: string }
 
-/** Overzicht per huurder of per woning. Betalingen zonder factuur tellen mee als ontvangen bij die groep. */
-export function groupBy(views: InvoiceView[], payments: Payment[], keyOf: (item: { tenant?: string; tenantId?: number; property?: string; propertyId?: number }) => { key: string; label: string } | null): GroupRow[] {
+/**
+ * Overzicht per huurder of per woning. Betalingen zonder factuur tellen mee als ontvangen bij die groep.
+ * `countInvoiced` beperkt alleen de kolom Gefactureerd (bijv. tot een periode); openstaand en achterstallig zijn altijd een stand van nu.
+ */
+export function groupBy(views: InvoiceView[], payments: Payment[], keyOf: (item: { tenant?: string; tenantId?: number; property?: string; propertyId?: number }) => { key: string; label: string } | null, countInvoiced: (view: InvoiceView) => boolean = () => true): GroupRow[] {
   const rows = new Map<string, GroupRow>()
   const row = (key: string, label: string) => rows.get(key) ?? rows.set(key, { key, label, invoiced: 0, received: 0, open: 0, overdue: 0, overdueCount: 0 }).get(key)!
   for (const view of views) {
@@ -81,7 +84,7 @@ export function groupBy(views: InvoiceView[], payments: Payment[], keyOf: (item:
     const group = keyOf(view)
     if (!group) continue
     const r = row(group.key, group.label)
-    r.invoiced = cents(r.invoiced + view.amount)
+    if (countInvoiced(view)) r.invoiced = cents(r.invoiced + view.amount)
     if (isOpen(view)) r.open = cents(r.open + view.balance)
     if (view.state === 'Achterstallig') {
       r.overdue = cents(r.overdue + view.balance)
@@ -127,9 +130,9 @@ export function monthly(views: InvoiceView[], payments: Payment[], months: strin
   }))
 }
 
-/** Volgend factuurnummer: F{jaar}-{volgnummer}, doorlopend per jaar. */
-export function nextInvoiceNumber(existing: string[], year: number) {
-  const prefix = `F${year}-`
+/** Volgend factuurnummer: {prefix}{jaar}-{volgnummer}, doorlopend per jaar. */
+export function nextInvoiceNumber(existing: string[], year: number, letters = 'F') {
+  const prefix = `${letters}${year}-`
   const highest = existing.filter(number => number.startsWith(prefix)).reduce((max, number) => Math.max(max, Number(number.slice(prefix.length)) || 0), 0)
   return `${prefix}${String(highest + 1).padStart(4, '0')}`
 }

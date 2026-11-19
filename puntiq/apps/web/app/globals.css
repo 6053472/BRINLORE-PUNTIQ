@@ -726,3 +726,126 @@ input[aria-invalid='true']:focus { border-color: var(--danger); box-shadow: 0 0 
   .report-actions .button { flex: 1; }
   .report-preview section, .report-preview > header { padding-left: 16px; padding-right: 16px; }
 }
+
+/* Paginering */
+.pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px var(--pad); border-top: 1px solid var(--line); }
+.pagination > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.page-indicator { font-size: 13px; font-weight: 600; padding: 0 6px; }
+
+/* Importeren en controleren */
+.import-drop { display: grid; gap: 8px; padding: 18px; border: 1px dashed var(--line); border-radius: 12px; background: var(--surface-2); }
+.import-summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.import-errors { max-height: 180px; overflow: auto; margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+
+/* ===== Kwaliteitsronde: toegankelijkheid, donker thema, mobiel, print ===== */
+:root { --topbar-h: 68px; --sticky-top: calc(var(--topbar-h) + 24px); }
+html { scrollbar-gutter: stable; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+.sidebar, .popover { overscroll-behavior: contain; }
+
+/* Focus zichtbaar op donkere vlakken */
+.sidebar :focus-visible, .announcement :focus-visible, .rent-highlight :focus-visible,
+.result-box :focus-visible, .gallery :focus-visible, .toast :focus-visible,
+.auth-aside :focus-visible, .report-preview > header :focus-visible { outline-color: var(--gold-soft); }
+.nav-item:focus-visible { outline-offset: -3px; }
+.top-search:focus-within, .search:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 35%, transparent); }
+.dropzone:focus-within, label.button:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.popover > button:focus-visible { background: var(--surface-2); outline-offset: -3px; }
+tr.clickable:focus-visible, .clickable-rows tbody tr:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; background: var(--surface-2); }
+.segmented button:focus-visible { outline-offset: -3px; }
+main:focus { outline: none; }
+
+/* Verborgen bestandsinvoer blijft met het toetsenbord bereikbaar */
+.sr { margin: -1px; padding: 0; border: 0; min-height: 0; }
+.button.disabled { opacity: 0.5; pointer-events: none; }
+
+/* Contrast */
+.link-button:hover, .contract-docs li.active strong, abbr { color: var(--warn-fg); }
+:root[data-theme='dark'] .link-button:hover, :root[data-theme='dark'] .contract-docs li.active strong, :root[data-theme='dark'] abbr { color: var(--gold-soft); }
+input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--muted) 78%, transparent); }
+:root[data-theme='dark'] .button.danger:not(.ghost) { --btn-fg: #0c1d29; }
+:root[data-theme='dark'] .button.danger:not(.ghost):hover { --btn-bg: #eb998b; --btn-border: #eb998b; }
+:root[data-theme='dark'] .toast.error { background: #8f3224; border-left-color: #fff; }
+:root[data-theme='dark'] .bell em { background: #c24a39; }
+:root[data-theme='dark'] .auth-main .button.ghost { --btn-border: rgba(20, 43, 59, 0.35); --btn-fg: #142b3b; }
+:root[data-theme='dark'] .auth-main .button.ghost:hover { --btn-bg: #142b3b; --btn-fg: #fff; --btn-border: #142b3b; }
+:root[data-theme='dark'] .auth-main input:focus { border-color: #142b3b; box-shadow: 0 0 0 1px #142b3b; }
+
+/* Formulieren */
+input:user-invalid, select:user-invalid, textarea:user-invalid { border-color: var(--danger); }
+input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
+.form-grid > label { min-width: 0; }
+.prefix-input { width: 110px; text-transform: uppercase; }
+
+/* Overflow en schaalbaarheid */
+.stat-card > div:last-child { min-width: 0; }
+.stat-card strong { font-size: clamp(20px, 1.9vw, 28px); overflow-wrap: anywhere; }
+.property-grid { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }
+.report-types { grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.grid-main { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 1100px) { .grid-main { grid-template-columns: minmax(0, 1fr); } .report-types { position: static; } }
+.modal-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.property-card h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.property-card-heading > div { min-width: 0; }
+.thumb button { width: 26px; height: 26px; top: 4px; right: 4px; }
+.gallery-arrow { width: 44px; height: 44px; }
+.settings-tabs, .report-types { top: var(--sticky-top); }
+td, th.right, td.right { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 900px) {
+  .sidebar { height: 100dvh; visibility: hidden; transition: transform 0.25s, visibility 0s 0.25s; }
+  .sidebar.open { visibility: visible; transition: transform 0.25s; }
+  .top-search { position: static; }
+  .search-results { left: 12px; right: 12px; width: auto; top: calc(100% + 4px); }
+}
+@media (max-width: 600px) {
+  .topbar { gap: 8px; }
+  .breadcrumbs { display: none; }
+  .top-search { min-width: 0; }
+  .modal, .modal.wide { min-height: 100dvh; }
+  .modal-head h2 { font-size: 22px; }
+  .contract-docs li { grid-template-columns: minmax(0, 1fr) auto; }
+  .contract-docs li > :first-child { display: none; }
+  .facts { grid-template-columns: 1fr; }
+}
+@media (pointer: coarse) { .button.small { min-height: 40px; } .icon-button { width: 44px; height: 44px; } }
+
+/* Compacte weergave consequent */
+:root.compact th { padding-top: 10px; padding-bottom: 10px; }
+:root.compact .table-tools, :root.compact .panel-heading { padding-top: 12px; padding-bottom: 12px; }
+:root.compact .nav-item { padding-top: 8px; padding-bottom: 8px; }
+:root.compact .property-grid { gap: 12px; }
+:root.compact .setting-row { padding: 10px 0; }
+
+/* Interactie en details */
+.segmented button { transition: background 0.15s, color 0.15s; }
+.segmented button:hover:not([aria-pressed='true']):not(:disabled) { background: var(--surface-2); }
+.property-card-image img { transition: transform 0.35s; }
+.property-card:hover .property-card-image img { transform: scale(1.03); }
+.empty-state { padding: 56px var(--pad); }
+.import-drop { border-radius: 0; border-color: color-mix(in srgb, var(--gold) 70%, transparent); }
+.button[aria-busy='true'] { pointer-events: none; opacity: 0.75; }
+.button[aria-busy='true']::after { content: ''; width: 14px; height: 14px; margin-left: 8px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Afdrukken: alleen de inhoud, altijd op wit */
+@media print {
+  :root { --bg: #fff; --surface: #fff; --surface-2: #f4f4f4; --ink: #142b3b; --muted: #333; --line: #bbb; --shadow: none; color-scheme: light; }
+  body { background: #fff; font-size: 11pt; }
+  .sidebar, .topbar, .scrim, .skip, .toasts, .announcement, .page-footer, .page-actions, .report-types, .report-options,
+  .report-actions, .table-tools, .pagination, .button, .icon-button, .modal-actions, .menu-button { display: none !important; }
+  .app-shell, .content { display: block; }
+  .panel, .report-preview { box-shadow: none; border: 1px solid #bbb; break-inside: avoid-page; margin-bottom: 12pt; }
+  .reports-layout { display: block; }
+  .report-preview > header, .report-table th, .result-box, .rent-highlight { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .table-scroll { overflow: visible; max-height: none; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  .modal-backdrop { position: static; background: none; padding: 0; overflow: visible; display: block; }
+  .modal { border: 0; box-shadow: none; width: 100%; animation: none; }
+  @page { margin: 16mm; }
+}
+
+.toggle:disabled { opacity: 0.45; cursor: not-allowed; }

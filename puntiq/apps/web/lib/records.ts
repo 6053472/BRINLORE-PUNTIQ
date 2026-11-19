@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { dataDirectory } from './paths'
 import { convertLegacyPayment, nextInvoiceNumber } from './finance'
+import { getUser } from './db'
 
 type SqliteStatement = {
   all: (...params: unknown[]) => Record<string, unknown>[]
@@ -134,10 +135,16 @@ const defaults: Partial<Record<RecordKind, Record<string, unknown>>> = {
   payments: { method: 'Overboeking' },
 }
 
-export const isKind = (value: string): value is RecordKind => value in schemas
+export const isKind = (value: string): value is RecordKind => Object.hasOwn(schemas, value)
 export const MAX_FILE_CHARS = 7_000_000
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/
+/** Controleert dat de datum bestaat (2026-02-31 wordt afgewezen in plaats van doorgerold naar maart). */
+function realDate(iso: string) {
+  const [year, month, day] = iso.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
 
 /** Validates and normalizes untrusted input against the schema. Unknown keys are dropped. */
 export function validate(kind: RecordKind, body: unknown, partial = false): { data?: Record<string, unknown>; error?: string } {
@@ -148,7 +155,9 @@ export function validate(kind: RecordKind, body: unknown, partial = false): { da
     const raw = input[key]
     if (raw === undefined || raw === null || raw === '') {
       if (spec.required && !partial) return { error: `Veld '${key}' is verplicht.` }
-      if (partial && key in input && !spec.required) data[key] = spec.type === 'number' ? null : ''
+      // Bij een gedeeltelijke update wist een leeg veld de waarde; verplichte velden, keuzelijsten en het factuurnummer niet.
+      if (partial && key in input && !spec.required && spec.type !== 'enum' && !(kind === 'invoices' && key === 'number')) data[key] = spec.type === 'number' ? null : ''
+      else if (partial && key in input && (spec.type === 'enum' || spec.required)) return { error: `Veld '${key}' mag niet leeg zijn.` }
       continue
     }
     if (spec.type === 'number') {
@@ -156,7 +165,7 @@ export function validate(kind: RecordKind, body: unknown, partial = false): { da
       if (!Number.isFinite(value) || (spec.min !== undefined && value < spec.min)) return { error: `Veld '${key}' bevat een ongeldig getal.` }
       data[key] = Math.round(value * 100) / 100
     } else if (spec.type === 'date') {
-      if (typeof raw !== 'string' || !isoDate.test(raw) || Number.isNaN(Date.parse(raw))) return { error: `Veld '${key}' bevat een ongeldige datum.` }
+      if (typeof raw !== 'string' || !isoDate.test(raw) || !realDate(raw)) return { error: `Veld '${key}' bevat een ongeldige datum.` }
       data[key] = raw
     } else if (spec.type === 'enum') {
       if (typeof raw !== 'string' || !spec.options?.includes(raw)) return { error: `Veld '${key}' bevat een ongeldige waarde.` }
@@ -281,7 +290,7 @@ export function createRecord(userId: number, kind: RecordKind, data: Record<stri
   try {
     if (kind === 'invoices' && !data.number) {
       const year = Number(String(data.issueDate ?? '').slice(0, 4)) || new Date().getFullYear()
-      data = { ...data, number: nextInvoiceNumber(invoiceNumbers(database, userId), year) }
+      data = { ...data, number: nextInvoiceNumber(invoiceNumbers(database, userId), year, getUser(userId)?.settings.invoicePrefix || 'F') }
     }
     const result = database.prepare('INSERT INTO records (user_id, kind, data_json, created_at) VALUES (?, ?, ?, ?)').run(userId, kind, JSON.stringify(data), new Date().toISOString())
     const row = database.prepare('SELECT * FROM records WHERE id = ?').get(Number(result.lastInsertRowid)) as Record<string, unknown>

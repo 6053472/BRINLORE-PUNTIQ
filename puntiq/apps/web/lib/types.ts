@@ -28,6 +28,10 @@ export type Property = {
   status: string
   points: number
   rent: number
+  /** Foto's worden niet met het overzicht meegeladen; `imageCount` zegt hoeveel er zijn. */
+  imageCount?: number
+  /** Wijzigt bij elke opslag, zodat een vervangen foto direct opnieuw wordt opgehaald. */
+  imageVersion?: number
   image?: string
   images?: string[]
   area?: number
